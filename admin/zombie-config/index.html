@@ -273,6 +273,7 @@ window.dispatchEvent(new Event('mgthumb-ready'));
     const sub=document.createElement('nav'); sub.className='subnav';
     const tabs=[['config','Cấu hình'],['objects','3D Object']];
     if(currentSlug==='my-city') tabs.push(['boundaries','Ranh giới thành phố']);
+    if(currentSlug==='outbreak-city') tabs.push(['districts','Quận thành phố']);
     tabs.forEach(([id,label])=>{
       const b=document.createElement('button');
       b.textContent=label; b.className=currentTab===id?'active':'';
@@ -283,6 +284,7 @@ window.dispatchEvent(new Event('mgthumb-ready'));
     body.appendChild(sub); body.appendChild(panel);
     if(currentTab==='config') renderConfig(panel);
     else if(currentTab==='boundaries') renderBoundaries(panel);
+    else if(currentTab==='districts') renderDistricts(panel);
     else renderObjects(panel);
   }
 
@@ -639,6 +641,66 @@ window.dispatchEvent(new Event('mgthumb-ready'));
     setState(now);
     input.value='';
     setStatus('b-status','Đã lưu ranh giới '+c.name+'.','ok');
+  }
+
+  // ---------- Thanh con "Quận thành phố" (game Đại Dịch) ----------
+  // Mỗi thành phố một file GeoJSON FeatureCollection; mỗi quận là một Feature Polygon/MultiPolygon có thuộc tính name.
+  function districtsFrom(json){
+    if(!json || json.type!=='FeatureCollection' || !Array.isArray(json.features)) return null;
+    const feats=json.features.filter(f=>f&&f.geometry&&(f.geometry.type==='Polygon'||f.geometry.type==='MultiPolygon'));
+    if(!feats.length) return null;
+    const out=feats.map((f,i)=>({type:'Feature',properties:{name:(f.properties&&(f.properties.name||f.properties['name:vi']||f.properties['name:en']))||('Quận '+(i+1))},geometry:f.geometry}));
+    return {type:'FeatureCollection',features:out};
+  }
+
+  async function renderDistricts(panel){
+    const card=document.createElement('div'); card.className='card';
+    card.innerHTML='<h2 style="margin-top:0">Quận thành phố</h2>'
+      +'<div class="small">Mỗi thành phố tải một file GeoJSON FeatureCollection, mỗi quận là một Polygon có thuộc tính <code>name</code>.</div>'
+      +'<div class="status" id="d-status"></div><div id="d-table"></div>';
+    panel.appendChild(card);
+    const {data,error}=await db.from('city_districts').select('city_id,updated_at,geojson');
+    if(error){ setStatus('d-status','Lỗi tải: '+error.message,'err'); return; }
+    const have=new Map((data||[]).map(r=>[r.city_id,r]));
+    const table=document.createElement('table');
+    table.innerHTML='<thead><tr><th>Thành phố</th><th>Trạng thái</th><th>File quận</th><th></th></tr></thead>';
+    const tbody=document.createElement('tbody');
+    CITY_BOUNDARIES.forEach(c=>{
+      const tr=document.createElement('tr');
+      const t1=document.createElement('td'); t1.textContent=c.name; tr.appendChild(t1);
+      const t2=document.createElement('td');
+      const setState=(row)=>{
+        if(!row){ t2.textContent='Chưa có'; t2.className='small'; return; }
+        const n=(row.geojson&&row.geojson.features)?row.geojson.features.length:0;
+        t2.textContent='Đã có '+n+' quận · '+new Date(row.updated_at).toLocaleString('vi-VN'); t2.className='ok';
+      };
+      setState(have.get(c.id)); tr.appendChild(t2);
+      const t3=document.createElement('td'); const f=document.createElement('input'); f.type='file'; f.accept='.json,.geojson,application/json'; t3.appendChild(f); tr.appendChild(t3);
+      const t4=document.createElement('td'); const b=document.createElement('button'); b.className='go'; b.style.margin='0'; b.textContent='Lưu';
+      b.onclick=()=>saveDistricts(c,f,b,setState);
+      t4.appendChild(b); tr.appendChild(t4);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    document.getElementById('d-table').appendChild(table);
+  }
+
+  async function saveDistricts(c,input,btn,setState){
+    const file=input.files&&input.files[0];
+    if(!file){ setStatus('d-status','Chọn file quận cho '+c.name+'.','err'); return; }
+    if(file.size>20*1024*1024){ setStatus('d-status','File quá lớn (tối đa 20 MB).','err'); return; }
+    let fc=null;
+    try{ fc=districtsFrom(JSON.parse(await file.text())); }
+    catch(e){ setStatus('d-status',c.name+': file không phải JSON hợp lệ.','err'); return; }
+    if(!fc){ setStatus('d-status',c.name+': file phải là FeatureCollection có ít nhất một quận dạng Polygon.','err'); return; }
+    btn.disabled=true;
+    const row={city_id:c.id,name:c.name,geojson:fc,updated_at:new Date().toISOString()};
+    const {error}=await db.from('city_districts').upsert(row,{onConflict:'city_id'});
+    btn.disabled=false;
+    if(error){ setStatus('d-status','Lỗi lưu '+c.name+': '+error.message,'err'); return; }
+    setState(row);
+    input.value='';
+    setStatus('d-status','Đã lưu '+fc.features.length+' quận của '+c.name+'.','ok');
   }
 
   // ---------- Đăng nhập / sự kiện ----------
