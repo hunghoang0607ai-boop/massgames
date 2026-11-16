@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Tải mô hình 3D — MassGames</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#12141a;color:#e8e8e8;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px;min-height:100vh}
+main{max-width:860px;margin:0 auto}
+a{color:#8b93a7;text-decoration:none;font-size:14px}
+a:hover{color:#f0c060}
+h1{color:#f0c060;font-size:22px;margin:10px 0 14px}
+.card{background:#1a1d26;border:1px solid #2a3144;border-radius:10px;padding:16px;margin-bottom:16px}
+label{display:block;font-size:13px;color:#8b93a7;margin:10px 0 4px}
+input[type=email],input[type=password],input[type=text]{width:100%;background:#0e1016;color:#eee;border:1px solid #47506a;border-radius:8px;padding:9px 10px;font-size:14px}
+input[type=file]{color:#ccc}
+button{background:#2a3144;color:#eee;border:1px solid #47506a;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer;margin-top:12px}
+button:hover:not(:disabled){background:#384262}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
+.status{margin-top:10px;font-size:14px;min-height:20px;white-space:pre-wrap}
+.ok{color:#7fdc8a}.err{color:#ff7b7b}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid #2a3144}
+th{color:#8b93a7;font-weight:600}
+td.url{word-break:break-all;font-size:12px;color:#9fb4d6}
+.hidden{display:none}
+.small{font-size:12px;color:#8a92a6;margin-top:6px}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../../assets/config.js"></script>
+</head>
+<body>
+<main>
+  <a href="../../">← Trang chủ MassGames</a>
+  <h1>Tải mô hình 3D lên kho</h1>
+
+  <section class="card" id="login-card">
+    <div>Đăng nhập bằng tài khoản Supabase của bạn.</div>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username">
+    <label for="password">Mật khẩu</label>
+    <input id="password" type="password" autocomplete="current-password">
+    <button class="go" id="btn-login">Đăng nhập</button>
+    <div class="status" id="login-status"></div>
+  </section>
+
+  <section class="card hidden" id="upload-card">
+    <div>Đang đăng nhập: <b id="who"></b> · <button id="btn-logout" style="margin:0;padding:4px 10px;font-size:12px">Đăng xuất</button></div>
+    <label for="name">Tên mô hình</label>
+    <input id="name" type="text" placeholder="Ví dụ: Tháp canh gỗ">
+    <label for="file">File 3D (.glb, .gltf, .fbx, .obj — tối đa 100 MB)</label>
+    <input id="file" type="file" accept=".glb,.gltf,.fbx,.obj">
+    <div class="small">Nên dùng .glb: gọn, có sẵn texture, đọc trực tiếp trên web.</div>
+    <button class="go" id="btn-upload">Tải lên</button>
+    <div class="status" id="upload-status"></div>
+  </section>
+
+  <section class="card hidden" id="list-card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <b>Kho mô hình</b>
+      <button id="btn-refresh" style="margin:0">Làm mới</button>
+    </div>
+    <table>
+      <thead><tr><th>Tên</th><th>Định dạng</th><th>Dung lượng</th><th>Đường dẫn công khai</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="status" id="list-status"></div>
+  </section>
+</main>
+
+<script>
+(function(){
+  const cfg = window.MASSGAMES_CONFIG;
+  const db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true }
+  });
+  const $ = id => document.getElementById(id);
+  const BUCKET = 'models-3d';
+  const MAX_BYTES = 100 * 1024 * 1024;
+
+  function setStatus(id, msg, cls){
+    const el = $(id); el.textContent = msg; el.className = 'status ' + (cls || '');
+  }
+  function fmtSize(n){
+    if(n >= 1024*1024) return (n/1024/1024).toFixed(1) + ' MB';
+    if(n >= 1024) return (n/1024).toFixed(0) + ' KB';
+    return n + ' B';
+  }
+  function safeName(s){
+    return s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D')
+      .replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').toLowerCase() || 'model';
+  }
+
+  async function showState(session){
+    const logged = !!session;
+    $('login-card').classList.toggle('hidden', logged);
+    $('upload-card').classList.toggle('hidden', !logged);
+    $('list-card').classList.toggle('hidden', !logged);
+    if(logged){
+      $('who').textContent = session.user.email;
+      await loadList();
+    }
+  }
+
+  async function loadList(){
+    setStatus('list-status', 'Đang tải danh sách...');
+    const { data, error } = await db.from('assets_3d')
+      .select('id,name,storage_path,format,size_bytes,created_at')
+      .order('created_at', { ascending: false });
+    const tbody = $('rows'); tbody.textContent = '';
+    if(error){ setStatus('list-status', 'Lỗi tải danh sách: ' + error.message, 'err'); return; }
+    if(!data.length){ setStatus('list-status', 'Chưa có mô hình nào.'); return; }
+    setStatus('list-status', '');
+    for(const row of data){
+      const tr = document.createElement('tr');
+      const url = db.storage.from(BUCKET).getPublicUrl(row.storage_path).data.publicUrl;
+      const cells = [row.name, row.format.toUpperCase(), fmtSize(row.size_bytes)];
+      cells.forEach(t => { const td = document.createElement('td'); td.textContent = t; tr.appendChild(td); });
+      const tdUrl = document.createElement('td'); tdUrl.className = 'url'; tdUrl.textContent = url; tr.appendChild(tdUrl);
+      const tdAct = document.createElement('td');
+      const del = document.createElement('button');
+      del.textContent = 'Xoá'; del.style.margin = '0';
+      del.onclick = async () => {
+        if(!confirm('Xoá mô hình "' + row.name + '"? Không thể hoàn tác.')) return;
+        const r1 = await db.storage.from(BUCKET).remove([row.storage_path]);
+        if(r1.error){ setStatus('list-status', 'Lỗi xoá file: ' + r1.error.message, 'err'); return; }
+        const r2 = await db.from('assets_3d').delete().eq('id', row.id);
+        if(r2.error){ setStatus('list-status', 'Lỗi xoá bản ghi: ' + r2.error.message, 'err'); return; }
+        loadList();
+      };
+      tdAct.appendChild(del); tr.appendChild(tdAct);
+      tbody.appendChild(tr);
+    }
+  }
+
+  $('btn-login').onclick = async () => {
+    setStatus('login-status', 'Đang đăng nhập...');
+    const { error } = await db.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
+    if(error){ setStatus('login-status', 'Đăng nhập thất bại: ' + error.message, 'err'); return; }
+    $('password').value = '';
+    setStatus('login-status', '');
+  };
+  $('btn-logout').onclick = async () => { await db.auth.signOut(); };
+  $('btn-refresh').onclick = loadList;
+
+  $('btn-upload').onclick = async () => {
+    const file = $('file').files[0];
+    const displayName = $('name').value.trim() || (file ? file.name : '');
+    if(!file){ setStatus('upload-status', 'Chọn một file trước.', 'err'); return; }
+    if(file.size > MAX_BYTES){ setStatus('upload-status', 'File vượt quá 100 MB.', 'err'); return; }
+    const ext = file.name.split('.').pop().toLowerCase();
+    if(!['glb','gltf','fbx','obj'].includes(ext)){ setStatus('upload-status', 'Định dạng không hỗ trợ.', 'err'); return; }
+    $('btn-upload').disabled = true;
+    const path = Date.now() + '-' + safeName(file.name.replace(/\.[^.]+$/, '')) + '.' + ext;
+    setStatus('upload-status', 'Đang tải lên ' + fmtSize(file.size) + '...');
+    const up = await db.storage.from(BUCKET).upload(path, file, {
+      cacheControl: '3600', upsert: false,
+      contentType: ext === 'glb' ? 'model/gltf-binary' : ext === 'gltf' ? 'model/gltf+json' : 'application/octet-stream'
+    });
+    if(up.error){
+      setStatus('upload-status', 'Lỗi tải file: ' + up.error.message, 'err');
+      $('btn-upload').disabled = false; return;
+    }
+    const ins = await db.from('assets_3d').insert({
+      name: displayName, storage_path: path, format: ext, size_bytes: file.size
+    });
+    $('btn-upload').disabled = false;
+    if(ins.error){
+      await db.storage.from(BUCKET).remove([path]);
+      setStatus('upload-status', 'Lỗi lưu thông tin: ' + ins.error.message, 'err'); return;
+    }
+    setStatus('upload-status', 'Đã tải lên thành công: ' + displayName, 'ok');
+    $('name').value = ''; $('file').value = '';
+    loadList();
+  };
+
+  db.auth.onAuthStateChange((_event, session) => { showState(session); });
+  db.auth.getSession().then(({ data }) => showState(data.session));
+})();
+</script>
+</body>
+</html>
