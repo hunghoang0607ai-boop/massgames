@@ -61,6 +61,9 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
   <button id="b-repair">Sửa căn cứ</button>
   <button id="b-up">[U] Nâng cấp tháp</button>
   <button id="b-sell">[S] Bán tháp</button>
+  <button id="b-zoomout">🔍−</button>
+  <button id="b-zoomin">🔍+</button>
+  <button id="b-zoomreset">Zoom <span id="zoom-lbl">100%</span></button>
   <button class="go" id="b-start">[Space] Bắt đầu đợt</button>
 </div>
 
@@ -679,16 +682,52 @@ function updateUI(){
 }
 
 // ===== Điều khiển =====
-function toCanvas(e){
+// ===== Zoom / xem bản đồ =====
+const view={z:1,cx:W/2,cy:H/2};
+const ZMIN=1, ZMAX=3;
+function clampView(){
+  const hw=W/2/view.z, hh=H/2/view.z;
+  view.cx=Math.min(W-hw,Math.max(hw,view.cx));
+  view.cy=Math.min(H-hh,Math.max(hh,view.cy));
+}
+function canvasPx(e){
   const r=cv.getBoundingClientRect();
   return {x:(e.clientX-r.left)*W/r.width, y:(e.clientY-r.top)*H/r.height};
 }
+function screenToWorld(px,py){ return {x:view.cx+(px-W/2)/view.z, y:view.cy+(py-H/2)/view.z}; }
+function toCanvas(e){ const p=canvasPx(e); return screenToWorld(p.x,p.y); }
+function updateZoomLabel(){ const el=document.getElementById('zoom-lbl'); if(el) el.textContent=Math.round(view.z*100)+'%'; }
+function setZoom(nz,px=W/2,py=H/2){
+  const w=screenToWorld(px,py);
+  view.z=Math.min(ZMAX,Math.max(ZMIN,nz));
+  view.cx=w.x-(px-W/2)/view.z;
+  view.cy=w.y-(py-H/2)/view.z;
+  clampView(); updateZoomLabel();
+}
+function zoomBy(f,px,py){ setZoom(view.z*f,px,py); }
 function cellAt(p){ return {c:Math.floor(p.x/CELL), r:Math.floor(p.y/CELL)}; }
+function panBy(dx,dy){ view.cx+=dx/view.z; view.cy+=dy/view.z; clampView(); }
+let drag=null, dragMoved=false;
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const p=canvasPx(e);
+  zoomBy(e.deltaY<0?1.15:1/1.15,p.x,p.y);
+},{passive:false});
+cv.addEventListener('mousedown',e=>{ if(view.z>1 && e.button===0){ drag={x:e.clientX,y:e.clientY}; dragMoved=false; } });
+window.addEventListener('mousemove',e=>{
+  if(!drag) return;
+  const r=cv.getBoundingClientRect();
+  const dx=(e.clientX-drag.x)*W/r.width, dy=(e.clientY-drag.y)*H/r.height;
+  if(Math.abs(dx)+Math.abs(dy)>4) dragMoved=true;
+  if(dragMoved){ panBy(-dx,-dy); drag={x:e.clientX,y:e.clientY}; }
+});
+window.addEventListener('mouseup',()=>{ drag=null; });
 
 cv.addEventListener('mousemove',e=>{ S.hover=cellAt(toCanvas(e)); });
 cv.addEventListener('mouseleave',()=>{ S.hover=null; });
 cv.addEventListener('contextmenu',e=>{ e.preventDefault(); S.pick=null; S.sel=null; });
 cv.addEventListener('click',e=>{
+  if(dragMoved){ dragMoved=false; return; }
   if(S.over) return;
   const {c,r}=cellAt(toCanvas(e));
   const t=S.towers.find(t=>t.c===c&&t.r===r);
@@ -743,6 +782,9 @@ $('b-repair').onclick=repairBase;
 $('b-up').onclick=()=>upgrade(S.sel);
 $('b-sell').onclick=()=>sell(S.sel);
 $('b-start').onclick=startWave;
+$('b-zoomin').onclick=()=>zoomBy(1.25);
+$('b-zoomout').onclick=()=>zoomBy(1/1.25);
+$('b-zoomreset').onclick=()=>setZoom(1);
 $('restart').onclick=()=>{ $('over').style.display='none'; S=newState(); };
 
 window.addEventListener('keydown',e=>{
@@ -754,6 +796,17 @@ window.addEventListener('keydown',e=>{
   else if(e.key==='u'||e.key==='U') upgrade(S.sel);
   else if(e.key==='s'||e.key==='S') sell(S.sel);
   else if(e.key==='Escape'){ S.pick=null; S.sel=null; }
+  else if(e.key==='+'||e.key==='='){ zoomBy(1.25); }
+  else if(e.key==='-'||e.key==='_'){ zoomBy(1/1.25); }
+  else if(e.key==='0'){ setZoom(1); }
+  else if(e.key.startsWith('Arrow') && view.z>1){
+    e.preventDefault();
+    const step=60;
+    if(e.key==='ArrowLeft') panBy(-step,0);
+    else if(e.key==='ArrowRight') panBy(step,0);
+    else if(e.key==='ArrowUp') panBy(0,-step);
+    else if(e.key==='ArrowDown') panBy(0,step);
+  }
 });
 
 // ===== Vòng lặp =====
@@ -762,7 +815,10 @@ let last=performance.now(), uiT=0;
 function loop(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   if(!S.over) update(dt);
+  ctx.save();
+  ctx.setTransform(view.z,0,0,view.z,W/2-view.cx*view.z,H/2-view.cy*view.z);
   render();
+  ctx.restore();
   uiT+=dt; if(uiT>0.1){ uiT=0; updateUI(); }
   requestAnimationFrame(loop);
 }
