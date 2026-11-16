@@ -31,6 +31,8 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
 #over p{margin:4px 0;font-size:16px}
 .hint{font-size:12px;color:#8a92a6;margin-top:6px;text-align:center}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../../assets/config.js"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 </head>
 <body>
@@ -79,6 +81,7 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
 
 <script type="module">
 import * as THREE from 'three';
+import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
 // ===== Dữ liệu (giống bản 2D) =====
 const W=1280,H=800,CELL=40;
@@ -144,7 +147,7 @@ function spawnZombie(type){
   else if(side===2){x=-20;y=Math.random()*H;}
   else {x=W+20;y=Math.random()*H;}
   const k=1+0.14*(S.waveNo-1);
-  S.zombies.push({x,y,hp:T.hp*k,maxHp:T.hp*k,speed:T.speed*(1+0.02*(S.waveNo-1)),dmg:T.dmg,r:T.r,
+  S.zombies.push({x,y,type,scale:T.scale||1,hp:T.hp*k,maxHp:T.hp*k,speed:T.speed*(1+0.02*(S.waveNo-1)),dmg:T.dmg,r:T.r,
     color:T.color,gold:T.gold,boss:!!T.boss,slowT:0,hitT:0,dead:false,ph:Math.random()*6,
     ang:Math.atan2(BASE.y-y,BASE.x-x)});
 }
@@ -399,6 +402,7 @@ const roofMats=['#9b3b2b','#3b5f8a','#6b4a2f','#4f7a3a'].map(c=>new THREE.MeshSt
 const wallColMats=['#c9a878','#b8c4cc','#d7c18e','#c9b48a'].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:0.9}));
 
 // Tường căn cứ (gỗ hoặc đá theo cấp gia cố)
+const WALL_COLORS={wood:'#8a6642',stone:'#8e9099'};
 let wallGroup=null, wallStone=null;
 const stakeGeo=new THREE.ConeGeometry(2.6,7,6);
 const merlonGeo=new THREE.BoxGeometry(6,5,4);
@@ -407,7 +411,7 @@ function buildWall(stone){
   wallStone=stone;
   wallGroup=new THREE.Group(); scene.add(wallGroup);
   const hh=stone?15:10;
-  const sideMat=new THREE.MeshStandardMaterial({color:stone?0x8e9099:0x8a6642,roughness:0.9,side:THREE.DoubleSide});
+  const sideMat=new THREE.MeshStandardMaterial({color:stone?WALL_COLORS.stone:WALL_COLORS.wood,roughness:0.9,side:THREE.DoubleSide});
   const body=new THREE.Mesh(new THREE.CylinderGeometry(BASE.r+3,BASE.r+3,hh,56,1,true),sideMat);
   body.position.set(BASE.x,hh/2,BASE.y); body.castShadow=body.receiveShadow=true;
   wallGroup.add(body);
@@ -455,8 +459,9 @@ function buildHouse(a,i){
   g.position.set(BASE.x+Math.cos(a)*30,0,BASE.y+Math.sin(a)*30);
   // mặt tiền hướng về tâm
   g.rotation.y=Math.atan2(-Math.cos(a),-Math.sin(a));
-  scene.add(g);
+  scene.add(g); houseGroups.push(g);
 }
+const houseGroups=[];
 HOUSE_ANG.forEach((a,i)=>buildHouse(a,i));
 
 // Lửa trại ở giữa
@@ -504,6 +509,15 @@ function makeBar(w,y){
 function makeTowerMesh(t){
   const T=TT[t.type];
   const g=new THREE.Group();
+  const slotT=cloneSlot('tower:'+t.type);
+  if(slotT){
+    g.add(slotT);
+    const barT=makeBar(20,22); g.add(barT.grp);
+    g.userData.bar=barT; g.userData.lvlShown=0; g.userData.stars=new THREE.Group(); g.add(g.userData.stars);
+    g.position.set(t.x,0,t.y);
+    g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+    return g;
+  }
   const accent=new THREE.MeshStandardMaterial({color:T.color,emissive:T.color,emissiveIntensity:0.25,roughness:0.5});
   const base=new THREE.Mesh(new THREE.CylinderGeometry(16,18,7,20),MAT.stone);
   base.position.y=3.5; base.castShadow=base.receiveShadow=true; g.add(base);
@@ -571,6 +585,14 @@ const eyeMat=new THREE.MeshStandardMaterial({color:0xff2020,emissive:0xff2020,em
 const skinMat=new THREE.MeshStandardMaterial({color:0x9fbf7a,roughness:0.9});
 function makeZombieMesh(z){
   const g=new THREE.Group();
+  const slotZ=cloneSlot('zombie:'+z.type);
+  if(slotZ){
+    g.add(slotZ);
+    const k0=z.r/10*1.2*(z.scale||1); g.scale.setScalar(k0);
+    const barZ=makeBar(3.2,5.6); g.add(barZ.grp);
+    g.userData={mat:new THREE.MeshStandardMaterial({color:0x000000}),legL:new THREE.Group(),legR:new THREE.Group(),bar:barZ,k:k0};
+    return g;
+  }
   const mat=new THREE.MeshStandardMaterial({color:z.color,roughness:0.9});
   const body=new THREE.Mesh(zBodyGeo,mat); body.position.y=2.6; body.castShadow=true; g.add(body);
   const head=new THREE.Mesh(zHeadGeo,skinMat); head.position.y=4.1; head.castShadow=true; g.add(head);
@@ -581,7 +603,7 @@ function makeZombieMesh(z){
   const legLM=new THREE.Mesh(zLegGeo,mat); legLM.position.y=-0.8; legLM.castShadow=true; legL.add(legLM); g.add(legL);
   const legR=new THREE.Group(); legR.position.set(0.35,1.6,0);
   const legRM=new THREE.Mesh(zLegGeo,mat); legRM.position.y=-0.8; legRM.castShadow=true; legR.add(legRM); g.add(legR);
-  const k=z.r/10*1.2;
+  const k=z.r/10*1.2*(z.scale||1);
   g.scale.setScalar(k);
   const bar=makeBar(3.2,5.6);
   g.add(bar.grp);
@@ -848,6 +870,87 @@ function resetScene(){
   for(const [,v] of fxVis){ if(v.obj) scene.remove(v.obj); v.dispose(); }
   fxVis.clear();
 }
+
+// ===== Cấu hình từ Supabase (game_entities) và mô hình 3D (assets_3d) =====
+const gltfLoader=new GLTFLoader();
+const gltfCache=new Map();
+const MODEL_SLOTS={};
+const HEIGHTS={'tower':22,'zombie':4.7,'building:house':22};
+function loadGltfScene(url){
+  if(!gltfCache.has(url)) gltfCache.set(url,new Promise((res,rej)=>gltfLoader.load(url,g=>res(g.scene),undefined,rej)));
+  return gltfCache.get(url);
+}
+async function prepareSlot(slotKey,url,targetH,mul){
+  const src=await loadGltfScene(url);
+  const holder=new THREE.Group();
+  holder.add(src.clone(true));
+  holder.updateMatrixWorld(true);
+  let box=new THREE.Box3().setFromObject(holder);
+  const size=box.getSize(new THREE.Vector3());
+  const f=(targetH/(size.y||1))*(mul||1);
+  holder.scale.setScalar(f);
+  holder.updateMatrixWorld(true);
+  box=new THREE.Box3().setFromObject(holder);
+  const ctr=box.getCenter(new THREE.Vector3());
+  holder.position.set(-ctr.x,-box.min.y,-ctr.z);
+  holder.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+  MODEL_SLOTS[slotKey]={scene:holder};
+}
+function cloneSlot(key){
+  const s=MODEL_SLOTS[key];
+  return s ? s.scene.clone(true) : null;
+}
+function rebuildHouseModels(){
+  if(!MODEL_SLOTS['building:house']) return;
+  houseGroups.forEach(g=>{ g.clear(); g.add(cloneSlot('building:house')); });
+}
+function applyRemoteConfig(rows,urls){
+  const jobs=[];
+  for(const r of rows){
+    const c=r.config||{};
+    const modelUrl=c.model_id?urls[c.model_id]:null;
+    if(r.kind==='tower' && TT[r.key]){
+      const T=TT[r.key];
+      ['cost','range','dmg','rate'].forEach(k=>{ if(typeof c[k]==='number') T[k]=c[k]; });
+      if(typeof c.color==='string') T.color=c.color;
+      if(typeof c.name==='string' && c.name) T.name=c.name;
+      if(modelUrl) jobs.push(prepareSlot('tower:'+r.key,modelUrl,HEIGHTS.tower,1));
+    }
+    else if(r.kind==='zombie' && ZT[r.key]){
+      const Z=ZT[r.key];
+      ['hp','speed','dmg','r','gold','scale'].forEach(k=>{ if(typeof c[k]==='number') Z[k]=c[k]; });
+      if(typeof c.color==='string') Z.color=c.color;
+      if(modelUrl) jobs.push(prepareSlot('zombie:'+r.key,modelUrl,HEIGHTS.zombie,1));
+    }
+    else if(r.kind==='building'){
+      if(r.key==='house'){
+        if(typeof c.wall_color==='string') wallColMats.forEach(m=>m.color.set(c.wall_color));
+        if(typeof c.roof_color==='string') roofMats.forEach(m=>m.color.set(c.roof_color));
+        if(modelUrl) jobs.push(prepareSlot('building:house',modelUrl,HEIGHTS['building:house'],1).then(rebuildHouseModels));
+      }
+      else if(r.key==='wall_wood' && typeof c.color==='string') WALL_COLORS.wood=c.color;
+      else if(r.key==='wall_stone' && typeof c.color==='string') WALL_COLORS.stone=c.color;
+    }
+  }
+  buildWall(!!wallStone);
+  return Promise.all(jobs);
+}
+async function loadRemoteConfig(){
+  try{
+    const c=window.MASSGAMES_CONFIG;
+    if(!window.supabase || !c) return;
+    const sb=window.supabase.createClient(c.SUPABASE_URL,c.SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false}});
+    const [rowsRes,assetsRes]=await Promise.all([
+      sb.from('game_entities').select('kind,key,config').eq('game_slug','zombie-fortress'),
+      sb.from('assets_3d').select('id,storage_path')
+    ]);
+    if(rowsRes.error||!rowsRes.data) return;
+    const urls={};
+    (assetsRes.data||[]).forEach(a=>{ urls[a.id]=sb.storage.from('models-3d').getPublicUrl(a.storage_path).data.publicUrl; });
+    await applyRemoteConfig(rowsRes.data,urls);
+  }catch(e){ console.warn('Không tải được cấu hình 3D:',e); }
+}
+loadRemoteConfig();
 
 // ===== Vòng lặp =====
 S=newState();

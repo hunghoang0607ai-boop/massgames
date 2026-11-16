@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Cấu hình 3D Pháo Đài Sống Sót — MassGames</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#12141a;color:#e8e8e8;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px;min-height:100vh}
+main{max-width:980px;margin:0 auto}
+a{color:#8b93a7;text-decoration:none;font-size:14px}
+a:hover{color:#f0c060}
+h1{color:#f0c060;font-size:22px;margin:10px 0 6px}
+h2{font-size:16px;color:#c9d1e0;margin:22px 0 8px;border-bottom:1px solid #2a3144;padding-bottom:6px}
+.card{background:#1a1d26;border:1px solid #2a3144;border-radius:10px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.item{background:#14171f;border:1px solid #2a3144;border-radius:8px;padding:12px}
+.item h3{margin:0 0 8px;font-size:15px;color:#f0c060}
+label{display:block;font-size:12px;color:#8b93a7;margin:8px 0 3px}
+input[type=text],input[type=email],input[type=password],input[type=number],select{width:100%;background:#0e1016;color:#eee;border:1px solid #47506a;border-radius:6px;padding:6px 8px;font-size:13px}
+input[type=color]{width:100%;height:30px;background:#0e1016;border:1px solid #47506a;border-radius:6px;padding:2px}
+button{background:#2a3144;color:#eee;border:1px solid #47506a;border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer;margin-top:10px}
+button:hover:not(:disabled){background:#384262}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
+.status{margin-top:10px;font-size:14px;min-height:20px;white-space:pre-wrap}
+.ok{color:#7fdc8a}.err{color:#ff7b7b}
+.hidden{display:none}
+.small{font-size:12px;color:#8a92a6}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../../assets/config.js"></script>
+</head>
+<body>
+<main>
+  <a href="../../">← Trang chủ MassGames</a> &nbsp;·&nbsp; <a href="../models/">Kho mô hình 3D</a>
+  <h1>Cấu hình 3D — Pháo Đài Sống Sót</h1>
+  <div class="small">Chỉnh màu, kích thước, chỉ số và mô hình 3D cho từng tháp, loại zombie và công trình. Thay đổi có hiệu lực ở lần tải trang game kế tiếp.</div>
+
+  <section class="card" id="login-card">
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username">
+    <label for="password">Mật khẩu</label>
+    <input id="password" type="password" autocomplete="current-password">
+    <div class="row">
+      <button class="go" id="btn-login">Đăng nhập</button>
+      <button id="btn-google">Đăng nhập bằng Google</button>
+    </div>
+    <div class="status" id="login-status"></div>
+  </section>
+
+  <section class="hidden" id="editor">
+    <div class="card row" style="justify-content:space-between">
+      <div>Đang đăng nhập: <b id="who"></b></div>
+      <button id="btn-logout" style="margin:0">Đăng xuất</button>
+    </div>
+    <div class="status" id="global-status"></div>
+
+    <h2>Tháp</h2>
+    <div class="grid" id="grp-tower"></div>
+
+    <h2>Loại zombie</h2>
+    <div class="grid" id="grp-zombie"></div>
+
+    <h2>Công trình</h2>
+    <div class="grid" id="grp-building"></div>
+  </section>
+</main>
+
+<script>
+(function(){
+  const cfg = window.MASSGAMES_CONFIG;
+  const GAME = 'zombie-fortress';
+  const db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true }
+  });
+  const $ = id => document.getElementById(id);
+  let assets = [];
+
+  // Khai báo các trường chỉnh cho từng loại. type: num | color | model
+  const SCHEMA = {
+    tower: {
+      rifle: { title:'Chốt bắn', fields:[['name','text','Tên'],['cost','num','Giá'],['range','num','Tầm bắn'],['dmg','num','Sát thương'],['rate','num','Chu kỳ bắn (s)'],['color','color','Màu nhấn'],['model','model','Mô hình 3D']] },
+      shotgun:{ title:'Súng săn', fields:[['name','text','Tên'],['cost','num','Giá'],['range','num','Tầm bắn'],['dmg','num','Sát thương'],['rate','num','Chu kỳ bắn (s)'],['color','color','Màu nhấn'],['model','model','Mô hình 3D']] },
+      flame:  { title:'Bình lửa', fields:[['name','text','Tên'],['cost','num','Giá'],['range','num','Tầm bắn'],['dmg','num','Sát thương'],['rate','num','Chu kỳ bắn (s)'],['color','color','Màu nhấn'],['model','model','Mô hình 3D']] }
+    },
+    zombie: {
+      walker:{ title:'Walker', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] },
+      runner:{ title:'Runner', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] },
+      tank:  { title:'Tank', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] },
+      boss:  { title:'Boss', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] }
+    },
+    building: {
+      house:      { title:'Nhà dân', fields:[['wall_color','color','Màu tường'],['roof_color','color','Màu mái'],['model','model','Mô hình 3D (thay cả nhà)']] },
+      wall_wood:  { title:'Tường gỗ', fields:[['color','color','Màu gỗ']] },
+      wall_stone: { title:'Tường đá', fields:[['color','color','Màu đá']] }
+    }
+  };
+  const GROUP = { tower:'grp-tower', zombie:'grp-zombie', building:'grp-building' };
+
+  function setStatus(id,msg,cls){ const el=$(id); el.textContent=msg; el.className='status '+(cls||''); }
+
+  async function showState(session){
+    const logged=!!session;
+    $('login-card').classList.toggle('hidden',logged);
+    $('editor').classList.toggle('hidden',!logged);
+    if(logged){ $('who').textContent=session.user.email; await loadAll(); }
+  }
+
+  async function loadAll(){
+    setStatus('global-status','Đang tải cấu hình...');
+    const [rowsRes, assetsRes] = await Promise.all([
+      db.from('game_entities').select('kind,key,config').eq('game_slug',GAME),
+      db.from('assets_3d').select('id,name,storage_path,format').order('created_at',{ascending:false})
+    ]);
+    if(rowsRes.error){ setStatus('global-status','Lỗi tải cấu hình: '+rowsRes.error.message,'err'); return; }
+    assets = assetsRes.data || [];
+    const map = {};
+    rowsRes.data.forEach(r => { map[r.kind+':'+r.key] = r.config || {}; });
+    for(const kind of Object.keys(SCHEMA)){
+      const grp = $(GROUP[kind]); grp.textContent='';
+      for(const key of Object.keys(SCHEMA[kind])){
+        grp.appendChild(buildCard(kind,key,SCHEMA[kind][key],map[kind+':'+key]||{}));
+      }
+    }
+    setStatus('global-status','');
+  }
+
+  function buildCard(kind,key,def,config){
+    const card=document.createElement('div'); card.className='item';
+    const h=document.createElement('h3'); h.textContent=def.title; card.appendChild(h);
+    const inputs={};
+    def.fields.forEach(([field,type,label])=>{
+      const l=document.createElement('label'); l.textContent=label; card.appendChild(l);
+      let input;
+      if(type==='model'){
+        input=document.createElement('select');
+        const none=document.createElement('option'); none.value=''; none.textContent='— Không dùng (hình mặc định) —';
+        input.appendChild(none);
+        assets.forEach(a=>{ const o=document.createElement('option'); o.value=a.id; o.textContent=a.name+' ('+a.format.toUpperCase()+')'; input.appendChild(o); });
+        input.value=config.model_id||'';
+      } else if(type==='color'){
+        input=document.createElement('input'); input.type='color';
+        input.value=/^#[0-9a-fA-F]{6}$/.test(config[field]||'')?config[field]:'#888888';
+      } else if(type==='num'){
+        input=document.createElement('input'); input.type='number'; input.step='any';
+        input.value=config[field]!==undefined?config[field]:'';
+      } else {
+        input=document.createElement('input'); input.type='text';
+        input.value=config[field]!==undefined?config[field]:'';
+      }
+      inputs[field]={el:input,type};
+      card.appendChild(input);
+    });
+    const btn=document.createElement('button'); btn.className='go'; btn.textContent='Lưu';
+    const st=document.createElement('div'); st.className='small';
+    btn.onclick=async()=>{
+      btn.disabled=true; st.textContent='Đang lưu...';
+      const newCfg={...config};
+      for(const [field,{el,type}] of Object.entries(inputs)){
+        if(type==='model'){ if(el.value) newCfg.model_id=el.value; else delete newCfg.model_id; }
+        else if(type==='num'){ if(el.value!=='') newCfg[field]=Number(el.value); }
+        else newCfg[field]=el.value;
+      }
+      const {error}=await db.from('game_entities').upsert({game_slug:GAME,kind,key,config:newCfg},{onConflict:'game_slug,kind,key'});
+      btn.disabled=false;
+      if(error){ st.className='small err'; st.textContent='Lỗi: '+error.message; return; }
+      Object.assign(config,newCfg);
+      st.className='small ok'; st.textContent='Đã lưu lúc '+new Date().toLocaleTimeString('vi-VN');
+    };
+    card.appendChild(btn); card.appendChild(st);
+    return card;
+  }
+
+  $('btn-login').onclick=async()=>{
+    setStatus('login-status','Đang đăng nhập...');
+    const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+    if(error){ setStatus('login-status','Đăng nhập thất bại: '+error.message,'err'); return; }
+    $('password').value=''; setStatus('login-status','');
+  };
+  $('btn-google').onclick=async()=>{
+    const {error}=await db.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin+'/admin/zombie-config/'}});
+    if(error) setStatus('login-status','Không thể đăng nhập bằng Google: '+error.message,'err');
+  };
+  $('btn-logout').onclick=async()=>{ await db.auth.signOut(); };
+
+  db.auth.onAuthStateChange((_e,session)=>{ showState(session); });
+  db.auth.getSession().then(({data})=>showState(data.session));
+})();
+</script>
+</body>
+</html>
