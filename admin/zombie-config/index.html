@@ -318,10 +318,10 @@ th{color:#8b93a7;font-weight:normal;font-size:12px}
   function renderObjects(panel){
     const up=document.createElement('div'); up.className='card';
     up.innerHTML='<h2 style="margin-top:0">Tải file 3D lên</h2>'
-      +'<label for="o-name">Tên hiển thị (để trống sẽ dùng tên file)</label>'
+      +'<label for="o-name">Tên hiển thị (chỉ dùng khi chọn 1 file; để trống sẽ dùng tên file)</label>'
       +'<input id="o-name" type="text">'
-      +'<label for="o-file">File (.glb, .gltf, .fbx, .obj; tối đa 100 MB)</label>'
-      +'<input id="o-file" type="file" accept=".glb,.gltf,.fbx,.obj">'
+      +'<label for="o-file">File (.glb, .gltf, .fbx, .obj; tối đa 100 MB mỗi file; có thể chọn nhiều file)</label>'
+      +'<input id="o-file" type="file" multiple accept=".glb,.gltf,.fbx,.obj">'
       +'<div class="small" style="margin-top:6px">Game chỉ hiển thị được .glb và .gltf. File .fbx và .obj vẫn lưu được nhưng sẽ không hiện trong game.</div>'
       +'<div class="row"><button class="go" id="o-upload">Tải lên</button></div>'
       +'<div class="status" id="o-status"></div>';
@@ -373,27 +373,42 @@ th{color:#8b93a7;font-weight:normal;font-size:12px}
   }
 
   async function uploadAsset(){
-    const file=document.getElementById('o-file').files[0];
-    const displayName=document.getElementById('o-name').value.trim()||(file?file.name:'');
+    const files=Array.from(document.getElementById('o-file').files||[]);
+    const typedName=document.getElementById('o-name').value.trim();
     const btn=document.getElementById('o-upload');
-    if(!file){ setStatus('o-status','Chọn một file trước.','err'); return; }
-    if(file.size>MAX_BYTES){ setStatus('o-status','File vượt quá 100 MB.','err'); return; }
-    const ext=file.name.split('.').pop().toLowerCase();
-    if(!['glb','gltf','fbx','obj'].includes(ext)){ setStatus('o-status','Định dạng không hỗ trợ.','err'); return; }
+    if(!files.length){ setStatus('o-status','Chọn ít nhất một file.','err'); return; }
     btn.disabled=true;
-    const path=Date.now()+'-'+safeName(file.name.replace(/\.[^.]+$/,''))+'.'+ext;
-    setStatus('o-status','Đang tải lên '+fmtSize(file.size)+'...');
-    const up=await db.storage.from(BUCKET).upload(path,file,{
-      cacheControl:'3600',upsert:false,
-      contentType: ext==='glb'?'model/gltf-binary':ext==='gltf'?'model/gltf+json':'application/octet-stream'
-    });
-    if(up.error){ setStatus('o-status','Lỗi tải file: '+up.error.message,'err'); btn.disabled=false; return; }
-    const ins=await db.from('assets_3d').insert({name:displayName,storage_path:path,format:ext,size_bytes:file.size});
+    const results=[];
+    for(let i=0;i<files.length;i++){
+      const file=files[i];
+      const label='['+(i+1)+'/'+files.length+'] '+file.name;
+      const err=checkFile(file);
+      if(err){ results.push(label+': '+err); continue; }
+      const ext=file.name.split('.').pop().toLowerCase();
+      const displayName=(files.length===1&&typedName)?typedName:file.name;
+      const path=Date.now()+'-'+i+'-'+safeName(file.name.replace(/\.[^.]+$/,''))+'.'+ext;
+      setStatus('o-status','Đang tải lên '+label+' ('+fmtSize(file.size)+')...');
+      const up=await db.storage.from(BUCKET).upload(path,file,{
+        cacheControl:'3600',upsert:false,
+        contentType: ext==='glb'?'model/gltf-binary':ext==='gltf'?'model/gltf+json':'application/octet-stream'
+      });
+      if(up.error){ results.push(label+': lỗi tải file ('+up.error.message+')'); continue; }
+      const ins=await db.from('assets_3d').insert({name:displayName,storage_path:path,format:ext,size_bytes:file.size});
+      if(ins.error){ await db.storage.from(BUCKET).remove([path]); results.push(label+': lỗi lưu thông tin ('+ins.error.message+')'); continue; }
+      results.push(label+': đã lưu');
+    }
     btn.disabled=false;
-    if(ins.error){ await db.storage.from(BUCKET).remove([path]); setStatus('o-status','Lỗi lưu thông tin: '+ins.error.message,'err'); return; }
-    setStatus('o-status','Đã tải lên: '+displayName,'ok');
+    const failed=results.some(r=>!r.endsWith('đã lưu'));
+    setStatus('o-status',results.join('\n'),failed?'err':'ok');
     document.getElementById('o-name').value=''; document.getElementById('o-file').value='';
     reloadAssets();
+  }
+
+  function checkFile(file){
+    if(file.size>MAX_BYTES) return 'vượt quá 100 MB';
+    const ext=file.name.split('.').pop().toLowerCase();
+    if(!['glb','gltf','fbx','obj'].includes(ext)) return 'định dạng không hỗ trợ';
+    return '';
   }
 
   async function deleteAsset(a,uses){
