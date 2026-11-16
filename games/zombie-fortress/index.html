@@ -286,82 +286,199 @@ function drawGround(){
 
 function drawHouse(hx,hy,w,roof,s){
   const t=S.t;
-  // bóng đổ
-  ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(hx+s*0.3,hy+s*0.62,s*1.0,s*0.36,0,0,6.283); ctx.fill();
-  // thân nhà và ván gỗ
+  // bóng đổ mềm dưới nhà
+  const sg=ctx.createRadialGradient(hx+s*0.3,hy+s*0.6,2,hx+s*0.3,hy+s*0.6,s*1.25);
+  sg.addColorStop(0,'rgba(0,0,0,0.42)'); sg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=sg; ctx.beginPath(); ctx.ellipse(hx+s*0.3,hy+s*0.6,s*1.25,s*0.42,0,0,6.283); ctx.fill();
+
   const bx=hx-s*0.62, by=hy-s*0.18, bw=s*1.24, bh=s*0.95;
-  ctx.fillStyle=w; ctx.fillRect(bx,by,bw,bh);
-  ctx.strokeStyle='rgba(0,0,0,0.16)'; ctx.lineWidth=1;
-  for(let i=1;i<4;i++){ const yy=by+bh*i/4; ctx.beginPath(); ctx.moveTo(bx,yy); ctx.lineTo(bx+bw,yy); ctx.stroke(); }
-  ctx.fillStyle='rgba(255,255,255,0.14)'; ctx.fillRect(bx,by,bw*0.14,bh);
-  ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.fillRect(bx+bw*0.8,by,bw*0.2,bh);
-  // ống khói và khói bay
-  ctx.fillStyle='#5a4a40'; ctx.fillRect(hx+s*0.32,hy-s*0.92,s*0.2,s*0.5);
-  ctx.fillStyle='#3d322b'; ctx.fillRect(hx+s*0.3,hy-s*0.94,s*0.24,s*0.07);
+  // ống khói gạch + khói
+  const chx=hx+s*0.3, chy=hy-s*0.94;
+  ctx.fillStyle='#7a4a3a'; ctx.fillRect(chx,chy,s*0.22,s*0.6);
+  ctx.strokeStyle='rgba(0,0,0,0.28)'; ctx.lineWidth=0.8;
+  for(let i=1;i<5;i++){ const yy=chy+s*0.6*i/5; ctx.beginPath(); ctx.moveTo(chx,yy); ctx.lineTo(chx+s*0.22,yy); ctx.stroke(); }
+  ctx.fillStyle='#4a3a32'; ctx.fillRect(chx-s*0.03,chy-s*0.06,s*0.28,s*0.08);
   for(let i=0;i<3;i++){
     const ph=(t*0.35+i/3+hx*0.013)%1;
-    ctx.fillStyle='rgba(225,225,235,'+(0.38*(1-ph))+')';
-    ctx.beginPath(); ctx.arc(hx+s*0.42+Math.sin(ph*4+i)*3,hy-s*0.98-ph*s*1.1,1.5+ph*3.5,0,6.283); ctx.fill();
+    ctx.fillStyle='rgba(225,225,235,'+(0.34*(1-ph))+')';
+    ctx.beginPath(); ctx.arc(chx+s*0.11+Math.sin(ph*4+i)*3,chy-s*0.1-ph*s*1.1,1.4+ph*3.6,0,6.283); ctx.fill();
   }
-  // mái có vài ngói
+
+  // thân nhà: màu nền + gradient ánh sáng/bóng
+  ctx.fillStyle=w; ctx.fillRect(bx,by,bw,bh);
+  const sh=ctx.createLinearGradient(bx,0,bx+bw,0);
+  sh.addColorStop(0,'rgba(255,240,205,0.22)'); sh.addColorStop(0.5,'rgba(0,0,0,0)'); sh.addColorStop(1,'rgba(0,0,0,0.32)');
+  ctx.fillStyle=sh; ctx.fillRect(bx,by,bw,bh);
+  // ván gỗ ngang
+  ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=0.8;
+  for(let i=1;i<6;i++){ const yy=by+bh*i/6; ctx.beginPath(); ctx.moveTo(bx,yy); ctx.lineTo(bx+bw,yy); ctx.stroke(); }
+  // góc nhà (viền gỗ)
+  ctx.fillStyle='rgba(255,255,255,0.16)'; ctx.fillRect(bx,by,1.5,bh);
+  ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.fillRect(bx+bw-1.5,by,1.5,bh);
+  // móng đá
+  ctx.fillStyle='#6f6a62'; ctx.fillRect(bx-0.5,by+bh-s*0.14,bw+1,s*0.14);
+  ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=0.8;
+  for(let i=1;i<5;i++){ const xx=bx+bw*i/5; ctx.beginPath(); ctx.moveTo(xx,by+bh-s*0.14); ctx.lineTo(xx,by+bh); ctx.stroke(); }
+
+  // mái: gradient + hàng ngói vòng cung
   const eave=hy-s*0.12, top=hy-s*1.02, ex=s*0.98;
   ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(hx-ex,eave); ctx.lineTo(hx,top); ctx.lineTo(hx+ex,eave); ctx.closePath(); ctx.fill();
+  const rg=ctx.createLinearGradient(0,top,0,eave);
+  rg.addColorStop(0,'rgba(255,255,255,0.2)'); rg.addColorStop(1,'rgba(0,0,0,0.32)');
+  ctx.fillStyle=rg; ctx.fill();
+  const rows=5;
+  for(let i=1;i<=rows;i++){
+    const f=i/rows, yy=top+(eave-top)*f, hw=ex*f;
+    ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=0.9;
+    ctx.beginPath(); ctx.moveTo(hx-hw,yy); ctx.lineTo(hx+hw,yy); ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,0.18)';
+    const step=2.6+s*0.05;
+    for(let xx=hx-hw+(i%2)*step/2; xx<=hx+hw; xx+=step){ ctx.beginPath(); ctx.arc(xx,yy+0.8,step*0.42,0,Math.PI); ctx.fill(); }
+  }
+  // mặt mái bên phải tối hơn + sống mái sáng
   ctx.fillStyle='rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.moveTo(hx,top); ctx.lineTo(hx+ex,eave); ctx.lineTo(hx,eave); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=1;
-  for(let i=1;i<4;i++){ const f=i/4, yy=top+(eave-top)*f, hw=ex*f; ctx.beginPath(); ctx.moveTo(hx-hw,yy); ctx.lineTo(hx+hw,yy); ctx.stroke(); }
-  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(hx-ex,eave); ctx.lineTo(hx,top); ctx.lineTo(hx+ex,eave); ctx.stroke();
-  // cửa sổ có ánh đèn và hộp hoa
+  ctx.strokeStyle='rgba(255,230,190,0.35)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(hx-ex*0.9,eave-s*0.02); ctx.lineTo(hx,top+0.6); ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,0.42)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(hx-ex-1,eave+1); ctx.lineTo(hx,top-1); ctx.lineTo(hx+ex+1,eave+1); ctx.stroke();
+  // bóng mái hắt xuống tường
+  ctx.fillStyle='rgba(0,0,0,0.28)'; ctx.fillRect(bx,eave,bw,s*0.05);
+
+  // cửa sổ: kính ấm, khung, cửa chớp, hộp hoa
   const wy=hy-s*0.02, ws=s*0.26;
   [hx-s*0.56, hx+s*0.3].forEach((wx,i)=>{
     const fl=0.75+0.25*Math.sin(t*2.5+hx+i*3);
-    const wg=ctx.createRadialGradient(wx+ws/2,wy+ws/2,1,wx+ws/2,wy+ws/2,ws*1.2);
-    wg.addColorStop(0,'rgba(255,210,120,'+(0.35*fl)+')'); wg.addColorStop(1,'rgba(255,210,120,0)');
-    ctx.fillStyle=wg; ctx.beginPath(); ctx.arc(wx+ws/2,wy+ws/2,ws*1.2,0,6.283); ctx.fill();
-    ctx.fillStyle='#ffd77a'; ctx.globalAlpha=fl; ctx.fillRect(wx,wy,ws,ws); ctx.globalAlpha=1;
+    const wg=ctx.createRadialGradient(wx+ws/2,wy+ws/2,1,wx+ws/2,wy+ws/2,ws*1.4);
+    wg.addColorStop(0,'rgba(255,210,120,'+(0.4*fl)+')'); wg.addColorStop(1,'rgba(255,210,120,0)');
+    ctx.fillStyle=wg; ctx.beginPath(); ctx.arc(wx+ws/2,wy+ws/2,ws*1.4,0,6.283); ctx.fill();
+    // cửa chớp hai bên
+    ctx.fillStyle=roof; ctx.fillRect(wx-s*0.1,wy-0.5,s*0.08,ws+1);
+    ctx.fillRect(wx+ws+s*0.02,wy-0.5,s*0.08,ws+1);
+    ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=0.6;
+    for(let k=1;k<4;k++){ const yy=wy+ws*k/4; ctx.beginPath(); ctx.moveTo(wx-s*0.1,yy); ctx.lineTo(wx-s*0.02,yy); ctx.moveTo(wx+ws+s*0.02,yy); ctx.lineTo(wx+ws+s*0.1,yy); ctx.stroke(); }
+    // kính
+    const gl=ctx.createLinearGradient(wx,wy,wx+ws,wy+ws);
+    gl.addColorStop(0,'#fff1bf'); gl.addColorStop(1,'#e0a24a');
+    ctx.globalAlpha=0.55+0.45*fl; ctx.fillStyle=gl; ctx.fillRect(wx,wy,ws,ws); ctx.globalAlpha=1;
+    // khung trắng và đố kính
     ctx.fillStyle='#efe6c8';
-    ctx.fillRect(wx-1,wy-1,ws+2,2); ctx.fillRect(wx-1,wy+ws-1,ws+2,2); ctx.fillRect(wx-1,wy-1,2,ws+2); ctx.fillRect(wx+ws-1,wy-1,2,ws+2);
+    ctx.fillRect(wx-1,wy-1,ws+2,1.2); ctx.fillRect(wx-1,wy+ws-0.2,ws+2,1.2);
+    ctx.fillRect(wx-1,wy-1,1.2,ws+2); ctx.fillRect(wx+ws-0.2,wy-1,1.2,ws+2);
     ctx.fillRect(wx+ws/2-0.5,wy,1,ws); ctx.fillRect(wx,wy+ws/2-0.5,ws,1);
-    ctx.fillStyle='#6b4a2f'; ctx.fillRect(wx-1,wy+ws+1,ws+2,s*0.07);
-    ['#ff6b8b','#ffd166','#ef476f','#9be564'].forEach((c,j)=>{ ctx.fillStyle=c; ctx.beginPath(); ctx.arc(wx+1+j*(ws/4),wy+ws+1,s*0.04,0,6.283); ctx.fill(); });
+    // bệ cửa + hộp hoa
+    ctx.fillStyle='#6b4a2f'; ctx.fillRect(wx-1.5,wy+ws+1,ws+3,s*0.07);
+    ['#ff6b8b','#ffd166','#ef476f','#9be564','#ff9ecf'].forEach((c,j)=>{ ctx.fillStyle=c; ctx.beginPath(); ctx.arc(wx+1+j*(ws/4.5),wy+ws+1,s*0.04,0,6.283); ctx.fill(); });
+    ctx.fillStyle='#4f7a3a'; ctx.fillRect(wx-1.5,wy+ws+s*0.03,ws+3,1);
   });
-  // cửa và bậc thềm
-  ctx.fillStyle='#3b2616'; ctx.fillRect(hx-s*0.14,hy+s*0.2,s*0.28,s*0.52);
-  ctx.fillStyle='#5a3a22'; ctx.fillRect(hx-s*0.11,hy+s*0.24,s*0.22,s*0.2);
-  ctx.fillStyle='#e8c15a'; ctx.beginPath(); ctx.arc(hx+s*0.09,hy+s*0.48,1.2,0,6.283); ctx.fill();
-  ctx.fillStyle='#8a8075'; ctx.fillRect(hx-s*0.22,hy+s*0.72,s*0.44,s*0.08);
+
+  // cửa chính có vòm
+  const dw=s*0.3, dx=hx-dw/2, dtop=hy+s*0.2, dbot=hy+s*0.72;
+  ctx.fillStyle='#2e1c10';
+  ctx.beginPath(); ctx.moveTo(dx-1,dbot); ctx.lineTo(dx-1,dtop+dw/2); ctx.arc(hx,dtop+dw/2,dw/2+1,Math.PI,0); ctx.lineTo(dx+dw+1,dbot); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#5a3a22'; ctx.beginPath(); ctx.moveTo(dx,dbot); ctx.lineTo(dx,dtop+dw/2); ctx.arc(hx,dtop+dw/2,dw/2,Math.PI,0); ctx.lineTo(dx+dw,dbot); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=0.7;
+  ctx.strokeRect(dx+dw*0.18,dtop+dw*0.5,dw*0.64,(dbot-dtop)*0.3);
+  ctx.strokeRect(dx+dw*0.18,dtop+dw*0.5+(dbot-dtop)*0.4,dw*0.64,(dbot-dtop)*0.3);
+  ctx.fillStyle='#e8c15a'; ctx.beginPath(); ctx.arc(hx+dw*0.3,hy+s*0.5,1.3,0,6.283); ctx.fill();
+  // bậc đá
+  ctx.fillStyle='#9a948a'; ctx.fillRect(hx-s*0.24,dbot,s*0.48,s*0.08);
+  ctx.fillStyle='#7d776e'; ctx.fillRect(hx-s*0.28,dbot+s*0.07,s*0.56,s*0.04);
 }
 
 function drawBase(){
   const x=BASE.x,y=BASE.y,R=BASE.r,t=S.t;
-  // đất nền
-  const gg=ctx.createRadialGradient(x,y,8,x,y,R+10);
-  gg.addColorStop(0,'#6b5636'); gg.addColorStop(1,'#3d3020');
-  ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(x,y,R+4,0,6.283); ctx.fill();
-  // ruộng rau
-  ctx.fillStyle='#4f7a3a'; ctx.fillRect(x-14,y+30,28,9);
-  ctx.fillStyle='#3d6130';
-  for(let i=0;i<4;i++){ ctx.fillRect(x-12+i*7,y+31,2,7); }
-  // tường bao: gỗ ở cấp thấp, đá ở cấp cao
   const stone=S.wall>=3;
-  const WALL=stone?'#9a9ca4':'#8a6642', DARK=stone?'#4e5058':'#4a3320';
-  const n=28;
-  for(let i=0;i<n;i++){
-    const a=i/n*6.283, w=0.06;
-    ctx.fillStyle=stone?'#c4c6cc':'#b08656';
-    ctx.beginPath();
-    ctx.moveTo(x+Math.cos(a-w)*(R-2),y+Math.sin(a-w)*(R-2));
-    ctx.lineTo(x+Math.cos(a)*(R+9),y+Math.sin(a)*(R+9));
-    ctx.lineTo(x+Math.cos(a+w)*(R-2),y+Math.sin(a+w)*(R-2));
-    ctx.fill();
+  // đất nền
+  const gg=ctx.createRadialGradient(x,y,8,x,y,R+18);
+  gg.addColorStop(0,'#7a6440'); gg.addColorStop(0.7,'#5a4a30'); gg.addColorStop(1,'#34291b');
+  ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(x,y,R+6,0,6.283); ctx.fill();
+  // hạt đất / sỏi (cố định theo chỉ số)
+  for(let i=0;i<70;i++){
+    const a=(i*2.399)%6.283, d=12+((i*37)%(R-6));
+    ctx.fillStyle=i%3?'rgba(0,0,0,0.18)':'rgba(255,230,180,0.12)';
+    ctx.beginPath(); ctx.arc(x+Math.cos(a)*d,y+Math.sin(a)*d,1+(i%3)*0.4,0,6.283); ctx.fill();
   }
-  ctx.strokeStyle=DARK; ctx.lineWidth=9+S.wall*1.5; ctx.beginPath(); ctx.arc(x,y,R,0,6.283); ctx.stroke();
-  ctx.strokeStyle=WALL; ctx.lineWidth=6+S.wall*1.5; ctx.stroke();
+  // lối đi đất từ tâm tới từng nhà
+  ctx.lineCap='round';
+  [Math.PI/4,3*Math.PI/4,5*Math.PI/4,7*Math.PI/4].forEach(a=>{
+    ctx.strokeStyle='rgba(120,96,62,0.55)'; ctx.lineWidth=7;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+Math.cos(a)*30,y+Math.sin(a)*30); ctx.stroke();
+    ctx.strokeStyle='rgba(180,150,105,0.25)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x,y-1); ctx.lineTo(x+Math.cos(a)*30,y+Math.sin(a)*30-1); ctx.stroke();
+  });
+  // cỏ quanh vòng ngoài
+  for(let i=0;i<36;i++){
+    const a=(i/36)*6.283+(i%5)*0.04, d=R+14+(i%4)*2;
+    const cx=x+Math.cos(a)*d, cy=y+Math.sin(a)*d;
+    ctx.strokeStyle='#4f7a3a'; ctx.lineWidth=1.2;
+    for(let k=-1;k<=1;k++){ ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+k*2.2,cy-4-(k===0?1.5:0)); ctx.stroke(); }
+  }
+  // ruộng rau: luống đất, hàng cây non
+  const rgx=x-26, rgy=y+26;
+  ctx.fillStyle='#4a3520'; ctx.fillRect(rgx,rgy,24,12);
+  ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=1;
+  for(let r=0;r<3;r++){
+    ctx.fillStyle='#3f6b2c';
+    for(let c=0;c<6;c++){ ctx.beginPath(); ctx.arc(rgx+3+c*3.6,rgy+3+r*3.6,1.6,0,6.283); ctx.fill(); }
+  }
+  ctx.strokeStyle='#6b4a2f'; ctx.lineWidth=2; ctx.strokeRect(rgx,rgy,24,12);
+  // thùng nước cạnh ruộng
+  ctx.fillStyle='#7a5530'; ctx.beginPath(); ctx.ellipse(x+30,y+30,4,5,0,0,6.283); ctx.fill();
+  ctx.strokeStyle='#4a3018'; ctx.lineWidth=1; ctx.stroke();
+  ctx.strokeStyle='#9a8f80'; ctx.lineWidth=0.8; ctx.beginPath(); ctx.moveTo(x+26,y+28); ctx.lineTo(x+34,y+28); ctx.stroke();
+
+  // tường bao
+  if(stone){
+    const DARK='#3e4048', MID='#8e9099', LIGHT='#c4c6cc';
+    // thân tường đá
+    ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=12+S.wall*1.5; ctx.beginPath(); ctx.arc(x+2,y+3,R+1,0,6.283); ctx.stroke();
+    ctx.strokeStyle=DARK; ctx.lineWidth=11+S.wall*1.5; ctx.beginPath(); ctx.arc(x,y,R,0,6.283); ctx.stroke();
+    ctx.strokeStyle=MID; ctx.lineWidth=8+S.wall*1.5; ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,0.22)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(x,y,R+2,Math.PI*1.05,Math.PI*1.95); ctx.stroke();
+    // mạch đá
+    ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=0.8;
+    for(let i=0;i<30;i++){
+      const a=i/30*6.283, a2=a+0.1;
+      ctx.beginPath(); ctx.moveTo(x+Math.cos(a)*(R-3),y+Math.sin(a)*(R-3)); ctx.lineTo(x+Math.cos(a)*(R+3),y+Math.sin(a)*(R+3)); ctx.stroke();
+    }
+    // lỗ châu mai
+    for(let i=0;i<24;i++){
+      const a=i/24*6.283;
+      if(i%2) continue;
+      ctx.save(); ctx.translate(x+Math.cos(a)*(R+6),y+Math.sin(a)*(R+6)); ctx.rotate(a+Math.PI/2);
+      ctx.fillStyle=LIGHT; ctx.fillRect(-3.5,-3,7,6);
+      ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.fillRect(-3.5,2,7,1);
+      ctx.restore();
+    }
+  } else {
+    // hàng cọc gỗ nhọn: thân + đầu nhọn có bóng
+    const n=36;
+    for(let i=0;i<n;i++){
+      const a=i/n*6.283, w=0.07;
+      const r0=R-3, r1=R+10;
+      const bx0=x+Math.cos(a)*r0, by0=y+Math.sin(a)*r0;
+      ctx.fillStyle='rgba(0,0,0,0.3)';
+      ctx.beginPath(); ctx.moveTo(bx0+2,by0+2); ctx.lineTo(x+Math.cos(a)*r1+2,y+Math.sin(a)*r1+2); ctx.lineTo(x+Math.cos(a+w)*r0+2,y+Math.sin(a+w)*r0+2); ctx.fill();
+      const g=ctx.createLinearGradient(bx0,by0,x+Math.cos(a)*r1,y+Math.sin(a)*r1);
+      g.addColorStop(0,'#7a5530'); g.addColorStop(1,'#d2a46a');
+      ctx.fillStyle=g;
+      ctx.beginPath();
+      ctx.moveTo(x+Math.cos(a-w)*r0,y+Math.sin(a-w)*r0);
+      ctx.lineTo(x+Math.cos(a)*r1,y+Math.sin(a)*r1);
+      ctx.lineTo(x+Math.cos(a+w)*r0,y+Math.sin(a+w)*r0);
+      ctx.fill();
+    }
+    // dây buộc hàng cọc
+    ctx.strokeStyle='#4a3018'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,R+3,0,6.283); ctx.stroke();
+    ctx.strokeStyle='rgba(255,220,160,0.25)'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(x,y,R+4,Math.PI*1.1,Math.PI*1.8); ctx.stroke();
+  }
   // đèn lồng quanh tường
   for(let i=0;i<8;i++){
     const a=i/8*6.283+0.2, lx=x+Math.cos(a)*(R-8), ly=y+Math.sin(a)*(R-8);
     const fl=0.6+0.4*Math.sin(t*6+i);
-    ctx.fillStyle='rgba(255,200,90,'+(0.25*fl)+')'; ctx.beginPath(); ctx.arc(lx,ly,7,0,6.283); ctx.fill();
-    ctx.fillStyle='#ffd27a'; ctx.beginPath(); ctx.arc(lx,ly,2,0,6.283); ctx.fill();
+    const lg=ctx.createRadialGradient(lx,ly,1,lx,ly,12);
+    lg.addColorStop(0,'rgba(255,200,90,'+(0.45*fl)+')'); lg.addColorStop(1,'rgba(255,200,90,0)');
+    ctx.fillStyle=lg; ctx.beginPath(); ctx.arc(lx,ly,12,0,6.283); ctx.fill();
+    ctx.fillStyle='#3a2a1c'; ctx.fillRect(lx-2.5,ly-3.5,5,7);
+    ctx.fillStyle='#ffd27a'; ctx.fillRect(lx-1.6,ly-2.4,3.2,4.8);
   }
   // nhà ở 4 góc
   const houses=[{a:Math.PI/4,w:'#c9a878',r:'#9b3b2b'},{a:3*Math.PI/4,w:'#b8c4cc',r:'#3b5f8a'},{a:5*Math.PI/4,w:'#d7c18e',r:'#6b4a2f'},{a:7*Math.PI/4,w:'#c9b48a',r:'#4f7a3a'}];
