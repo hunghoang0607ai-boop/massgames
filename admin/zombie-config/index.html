@@ -180,6 +180,7 @@ window.dispatchEvent(new Event('mgthumb-ready'));
   let allEntities = [];     // game_entities của mọi game, để biết mô hình nào đang được dùng ở đâu
   let currentSlug = null;
   let currentTab = 'config';
+  let selected = new Set();  // id các file 3D đang chọn để xoá
   let currentConfig = {};   // map 'kind:key' -> config của game đang mở
 
   // Cấu hình 3D theo từng game. Game chưa có khai báo sẽ không có mục Cấu hình.
@@ -370,7 +371,7 @@ window.dispatchEvent(new Event('mgthumb-ready'));
     panel.appendChild(up);
 
     const list=document.createElement('div'); list.className='card';
-    list.innerHTML='<h2 style="margin-top:0">Danh sách file 3D</h2><div class="status" id="o-list-status"></div><div id="o-table"></div>';
+    list.innerHTML='<h2 style="margin-top:0">Danh sách file 3D</h2><div class="status" id="o-list-status"></div><div class="row" id="o-toolbar" style="margin:8px 0"></div><div id="o-table"></div>';
     panel.appendChild(list);
 
     up.querySelector('#o-upload').onclick=uploadAsset;
@@ -379,14 +380,31 @@ window.dispatchEvent(new Event('mgthumb-ready'));
 
   function renderAssetTable(){
     const host=document.getElementById('o-table'); if(!host) return;
+    selected=new Set([...selected].filter(id=>assets.some(a=>a.id===id)));
     host.textContent='';
+    updateToolbar();
     if(!assets.length){ setStatus('o-list-status','Chưa có file 3D nào.'); return; }
     setStatus('o-list-status','');
     const table=document.createElement('table');
-    table.innerHTML='<thead><tr><th>Ảnh</th><th>Tên</th><th>Định dạng</th><th>Dung lượng</th><th>Đang gán cho</th><th></th></tr></thead>';
+    table.innerHTML='<thead><tr><th><input type="checkbox" id="o-all" title="Chọn tất cả"></th><th>Ảnh</th><th>Tên</th><th>Định dạng</th><th>Dung lượng</th><th>Đang gán cho</th><th></th></tr></thead>';
     const tbody=document.createElement('tbody');
+    const allCb=table.querySelector('#o-all');
+    allCb.checked=assets.every(a=>selected.has(a.id));
+    allCb.onchange=()=>{
+      selected = allCb.checked ? new Set(assets.map(a=>a.id)) : new Set();
+      tbody.querySelectorAll('input[type=checkbox]').forEach(cb=>{ cb.checked=allCb.checked; });
+      updateToolbar();
+    };
     assets.forEach(a=>{
       const tr=document.createElement('tr');
+      const tdChk=document.createElement('td');
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=selected.has(a.id);
+      cb.onchange=()=>{
+        if(cb.checked) selected.add(a.id); else selected.delete(a.id);
+        allCb.checked=assets.every(x=>selected.has(x.id));
+        updateToolbar();
+      };
+      tdChk.appendChild(cb); tr.appendChild(tdChk);
       const tdImg=document.createElement('td'); tdImg.appendChild(thumbCell(a)); tr.appendChild(tdImg);
       const tdName=document.createElement('td'); tdName.textContent=a.name; tr.appendChild(tdName);
       const tdFmt=document.createElement('td'); tdFmt.textContent=(a.format||'').toUpperCase(); tr.appendChild(tdFmt);
@@ -403,6 +421,38 @@ window.dispatchEvent(new Event('mgthumb-ready'));
       tbody.appendChild(tr);
     });
     table.appendChild(tbody); host.appendChild(table);
+  }
+
+  function updateToolbar(){
+    const bar=document.getElementById('o-toolbar'); if(!bar) return;
+    const n=selected.size;
+    bar.textContent='';
+    const info=document.createElement('span'); info.className='small';
+    info.textContent=n?('Đã chọn '+n+' file'):'Chưa chọn file nào';
+    const del=document.createElement('button'); del.className='danger'; del.style.margin='0';
+    del.disabled=!n; del.textContent='Xoá đã chọn ('+n+')';
+    del.onclick=deleteSelected;
+    const clr=document.createElement('button'); clr.style.margin='0';
+    clr.disabled=!n; clr.textContent='Bỏ chọn';
+    clr.onclick=()=>{ selected.clear(); renderAssetTable(); };
+    bar.appendChild(info); bar.appendChild(del); bar.appendChild(clr);
+  }
+
+  async function deleteSelected(){
+    const picked=assets.filter(a=>selected.has(a.id));
+    if(!picked.length) return;
+    const inUse=picked.filter(a=>usagesOf(a.id).length).length;
+    let msg='Xoá '+picked.length+' file đã chọn? Không thể hoàn tác.';
+    if(inUse) msg+='\n\n'+inUse+' file đang được gán; các mục đó sẽ dùng hình mặc định sau khi xoá.';
+    if(!confirm(msg)) return;
+    setStatus('o-list-status','Đang xoá '+picked.length+' file...');
+    const r1=await db.storage.from(BUCKET).remove(picked.map(a=>a.storage_path));
+    if(r1.error){ setStatus('o-list-status','Lỗi xoá file trong storage: '+r1.error.message,'err'); return; }
+    const r2=await db.from('assets_3d').delete().in('id',picked.map(a=>a.id));
+    if(r2.error){ setStatus('o-list-status','Lỗi xoá bản ghi: '+r2.error.message,'err'); return; }
+    selected.clear();
+    await reloadAssets();
+    setStatus('o-list-status','Đã xoá '+picked.length+' file.','ok');
   }
 
   function publicUrlOf(a){ return db.storage.from(BUCKET).getPublicUrl(a.storage_path).data.publicUrl; }
