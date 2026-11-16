@@ -28,15 +28,16 @@ a:hover{color:#f0c060}
 /* Màn bản đồ 3D */
 #viewer{position:fixed;inset:0}
 #map{position:absolute;inset:0}
-.hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;pointer-events:none;z-index:2}
+.hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;pointer-events:none;z-index:2;flex-wrap:wrap}
 .hud > *{pointer-events:auto}
 .panel{background:rgba(18,20,26,.85);border:1px solid #2a3144;border-radius:10px;padding:10px 14px;backdrop-filter:blur(4px)}
 .panel h2{margin:0;font-size:16px;color:#f0c060}
 .panel .small{font-size:12px;color:#8a92a6;margin-top:2px}
-.btn{background:#2a3144;color:#eee;border:1px solid #47506a;border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer;font:inherit}
+.btns{display:flex;gap:8px}
+.btn{background:#2a3144;color:#eee;border:1px solid #47506a;border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer;font:inherit;display:inline-block}
 .btn:hover{background:#384262}
-.loading{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(18,20,26,.85);padding:8px 14px;border-radius:8px;font-size:13px;z-index:2;color:#cfd6e4}
-.err{color:#ff7b7b}
+.note{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(18,20,26,.9);padding:8px 14px;border-radius:8px;font-size:13px;z-index:2;color:#cfd6e4;max-width:90%;text-align:center}
+.note.err{color:#ff7b7b}
 </style>
 </head>
 <body>
@@ -45,7 +46,7 @@ a:hover{color:#f0c060}
   <div class="top">
     <div>
       <h1>My City</h1>
-      <p>Chọn một thành phố để xem bản đồ 3D toàn thành phố.</p>
+      <p>Chọn một thành phố. Chỉ hiện ranh giới thành phố đó, phần ngoài sẽ bị làm mờ.</p>
     </div>
     <a href="../../">← Trang chủ</a>
   </div>
@@ -57,34 +58,41 @@ a:hover{color:#f0c060}
   <div class="hud">
     <div class="panel">
       <h2 id="city-name"></h2>
-      <div class="small">Kéo để di chuyển · Xoay: giữ chuột phải hoặc Ctrl + kéo · Nghiêng: Shift + kéo</div>
+      <div class="small">Kéo để di chuyển · Giữ chuột phải hoặc Ctrl + kéo để xoay · Shift + kéo để nghiêng</div>
+      <div class="small">Ranh giới: OpenStreetMap (Nominatim)</div>
     </div>
-    <div class="row" style="display:flex;gap:8px">
+    <div class="btns">
       <button class="btn" id="btn-change">Chọn thành phố khác</button>
-      <a class="btn" href="../../" style="display:inline-block">Trang chủ</a>
+      <a class="btn" href="../../">Trang chủ</a>
     </div>
   </div>
-  <div class="loading hidden" id="loading">Đang tải bản đồ...</div>
+  <div class="note hidden" id="note"></div>
 </section>
 
 <script>
 (function(){
-  // Bản đồ nền lấy từ OpenFreeMap (miễn phí, không cần khoá API).
+  // Bản đồ nền OpenFreeMap (miễn phí, không cần khoá API).
   const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+  // q: tên tra cứu ranh giới trên OpenStreetMap (Nominatim)
   const CITIES = [
-    { id:'hanoi',     name:'Hà Nội',          country:'Việt Nam',  lng:105.8542, lat:21.0285 },
-    { id:'hcm',       name:'TP. Hồ Chí Minh', country:'Việt Nam',  lng:106.7009, lat:10.7769 },
-    { id:'danang',    name:'Đà Nẵng',         country:'Việt Nam',  lng:108.2022, lat:16.0544 },
-    { id:'tokyo',     name:'Tokyo',           country:'Nhật Bản',  lng:139.6503, lat:35.6762 },
-    { id:'singapore', name:'Singapore',       country:'Singapore', lng:103.8198, lat:1.3521 },
-    { id:'paris',     name:'Paris',           country:'Pháp',      lng:2.3522,   lat:48.8566 },
-    { id:'london',    name:'London',          country:'Anh',       lng:-0.1278,  lat:51.5074 },
-    { id:'newyork',   name:'New York',        country:'Hoa Kỳ',    lng:-74.0060, lat:40.7128 }
+    { id:'hanoi',     name:'Hà Nội',          country:'Việt Nam',  q:'Hà Nội, Việt Nam',              lng:105.8542, lat:21.0285 },
+    { id:'hcm',       name:'TP. Hồ Chí Minh', country:'Việt Nam',  q:'Thành phố Hồ Chí Minh, Việt Nam', lng:106.7009, lat:10.7769 },
+    { id:'danang',    name:'Đà Nẵng',         country:'Việt Nam',  q:'Đà Nẵng, Việt Nam',             lng:108.2022, lat:16.0544 },
+    { id:'tokyo',     name:'Tokyo',           country:'Nhật Bản',  q:'Tokyo, Japan',                  lng:139.6503, lat:35.6762 },
+    { id:'singapore', name:'Singapore',       country:'Singapore', q:'Singapore',                     lng:103.8198, lat:1.3521 },
+    { id:'paris',     name:'Paris',           country:'Pháp',      q:'Paris, France',                 lng:2.3522,   lat:48.8566 },
+    { id:'london',    name:'London',          country:'Anh',       q:'London, United Kingdom',        lng:-0.1278,  lat:51.5074 },
+    { id:'newyork',   name:'New York',        country:'Hoa Kỳ',    q:'New York City, United States',  lng:-74.0060, lat:40.7128 }
   ];
   const VIEW = { zoom:15.5, pitch:60, bearing:-17 };
+  const EMPTY = { type:'FeatureCollection', features:[] };
 
   const $ = id => document.getElementById(id);
   let map = null;
+  let styleReady = false;
+  let pendingGeom = null;   // ranh giới chờ khi bản đồ chưa tải xong style
+  let pendingClear = false; // yêu cầu bỏ ranh giới chờ khi style chưa xong
+  let loadToken = 0;        // tránh kết quả cũ ghi đè khi người dùng đổi thành phố nhanh
 
   // Danh sách thành phố
   const list = $('cities');
@@ -98,27 +106,103 @@ a:hover{color:#f0c060}
     list.appendChild(b);
   });
 
+  function showNote(msg, isErr){
+    const n=$('note'); n.textContent=msg; n.className='note'+(isErr?' err':'');
+  }
+  function hideNote(){ $('note').className='note hidden'; }
+
   function showPicker(){
+    loadToken++;
     $('viewer').classList.add('hidden');
     $('picker').classList.remove('hidden');
     history.replaceState(null,'',location.pathname);
   }
 
-  // Thêm lớp toà nhà 3D lấy từ dữ liệu vector của OpenFreeMap
-  function addBuildings(){
+  // ---- Ranh giới thành phố ----
+  async function fetchBoundary(c){
+    const key='mc-boundary-v1-'+c.id;
+    try{ const cached=localStorage.getItem(key); if(cached) return JSON.parse(cached); }catch(e){}
+    const url='https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&limit=5&accept-language=vi&q='+encodeURIComponent(c.q);
+    const r=await fetch(url);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const arr=await r.json();
+    const hit=(arr||[]).find(x=>x.geojson&&(x.geojson.type==='Polygon'||x.geojson.type==='MultiPolygon'));
+    if(!hit) throw new Error('không có dữ liệu ranh giới');
+    try{ localStorage.setItem(key,JSON.stringify(hit.geojson)); }catch(e){}
+    return hit.geojson;
+  }
+
+  // Mặt nạ: toàn thế giới trừ đi phần thành phố (các vòng ngoài của mọi đa giác thành phố là lỗ)
+  function maskFor(geom){
+    const world=[[-180,-85],[180,-85],[180,85],[-180,85],[-180,-85]];
+    const polys = geom.type==='Polygon' ? [geom.coordinates] : geom.coordinates;
+    const holes = polys.map(p=>p[0]);
+    return { type:'Feature', properties:{}, geometry:{ type:'Polygon', coordinates:[world, ...holes] } };
+  }
+
+  function bboxOf(geom){
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    (function walk(a){
+      if(typeof a[0]==='number'){ const [x,y]=a; if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
+      else a.forEach(walk);
+    })(geom.coordinates);
+    return [minX,minY,maxX,maxY];
+  }
+
+  // Lớp toà nhà 3D lấy từ dữ liệu vector của OpenFreeMap, và lớp mặt nạ + viền ranh giới
+  function addLayers(){
     const style = map.getStyle();
     const src = Object.keys(style.sources).find(k=>style.sources[k].type==='vector');
-    if(!src || map.getLayer('city-3d-buildings')) return;
     const firstSymbol = (style.layers.find(l=>l.type==='symbol')||{}).id;
-    map.addLayer({
-      id:'city-3d-buildings', type:'fill-extrusion', source:src, 'source-layer':'building', minzoom:13,
-      paint:{
-        'fill-extrusion-color':['interpolate',['linear'],['coalesce',['get','render_height'],10],0,'#d8d2c4',60,'#c0b8a6',200,'#9aa3b2'],
-        'fill-extrusion-height':['coalesce',['get','render_height'],8],
-        'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
-        'fill-extrusion-opacity':0.95
-      }
-    }, firstSymbol);
+    if(src && !map.getLayer('city-3d-buildings')){
+      map.addLayer({
+        id:'city-3d-buildings', type:'fill-extrusion', source:src, 'source-layer':'building', minzoom:13,
+        filter:['==',0,1],   // ẩn cho tới khi có ranh giới
+        paint:{
+          'fill-extrusion-color':['interpolate',['linear'],['coalesce',['get','render_height'],10],0,'#d8d2c4',60,'#c0b8a6',200,'#9aa3b2'],
+          'fill-extrusion-height':['coalesce',['get','render_height'],8],
+          'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
+          'fill-extrusion-opacity':0.95
+        }
+      }, firstSymbol);
+    }
+    map.addSource('mc-mask',{type:'geojson',data:EMPTY});
+    map.addSource('mc-outline',{type:'geojson',data:EMPTY});
+    map.addLayer({id:'mc-mask',type:'fill',source:'mc-mask',paint:{'fill-color':'#07090d','fill-opacity':0.72}},firstSymbol);
+    map.addLayer({id:'mc-outline',type:'line',source:'mc-outline',paint:{'line-color':'#f0c060','line-width':2.5,'line-opacity':0.9}},firstSymbol);
+  }
+
+  function applyBoundary(geom){
+    if(!styleReady){ pendingGeom=geom; return; }
+    map.getSource('mc-mask').setData(maskFor(geom));
+    map.getSource('mc-outline').setData({type:'Feature',properties:{},geometry:geom});
+    // Chỉ giữ các toà nhà nằm hoàn toàn trong ranh giới thành phố
+    map.setFilter('city-3d-buildings',['within',geom]);
+    const b=bboxOf(geom);
+    map.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:80,pitch:VIEW.pitch,bearing:VIEW.bearing,duration:1500,maxZoom:16.5});
+  }
+
+  function clearBoundary(){
+    if(!styleReady){ pendingGeom=null; pendingClear=true; return; }
+    pendingClear=false;
+    map.getSource('mc-mask').setData(EMPTY);
+    map.getSource('mc-outline').setData(EMPTY);
+    map.setFilter('city-3d-buildings',null);
+  }
+
+  async function loadCity(c){
+    const token=++loadToken;
+    showNote('Đang tải ranh giới '+c.name+'...');
+    try{
+      const geom=await fetchBoundary(c);
+      if(token!==loadToken) return;
+      applyBoundary(geom);
+      hideNote();
+    }catch(e){
+      if(token!==loadToken) return;
+      clearBoundary();
+      showNote('Không tải được ranh giới '+c.name+' ('+e.message+'). Đang hiện toàn bản đồ.',true);
+    }
   }
 
   function openCity(id){
@@ -130,23 +214,25 @@ a:hover{color:#f0c060}
     history.replaceState(null,'','?city='+c.id);
 
     if(!map){
-      $('loading').classList.remove('hidden');
       map = new maplibregl.Map({
         container:'map', style:STYLE,
         center:[c.lng,c.lat], zoom:VIEW.zoom, pitch:VIEW.pitch, bearing:VIEW.bearing,
         maxPitch:85, attributionControl:{compact:true}
       });
-      map.on('style.load', addBuildings);
-      map.on('load', ()=>$('loading').classList.add('hidden'));
+      map.on('style.load', ()=>{
+        styleReady=true;
+        addLayers();
+        if(pendingGeom){ const g=pendingGeom; pendingGeom=null; applyBoundary(g); }
+        else if(pendingClear){ clearBoundary(); }
+      });
       map.on('error', e=>{
         const msg = e && e.error && e.error.message ? e.error.message : 'không rõ';
-        $('loading').textContent = 'Không tải được bản đồ: ' + msg;
-        $('loading').classList.remove('hidden');
-        $('loading').classList.add('err');
+        showNote('Lỗi bản đồ: '+msg, true);
       });
     } else {
       map.flyTo({ center:[c.lng,c.lat], zoom:VIEW.zoom, pitch:VIEW.pitch, bearing:VIEW.bearing, speed:1.2 });
     }
+    loadCity(c);
   }
 
   $('btn-change').onclick = showPicker;
