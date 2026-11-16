@@ -44,6 +44,7 @@ td.url{word-break:break-all;font-size:12px;color:#9fb4d6}
     <label for="password">Mật khẩu</label>
     <input id="password" type="password" autocomplete="current-password">
     <button class="go" id="btn-login">Đăng nhập</button>
+    <button id="btn-google">Đăng nhập bằng Google</button>
     <div class="status" id="login-status"></div>
   </section>
 
@@ -142,6 +143,14 @@ td.url{word-break:break-all;font-size:12px;color:#9fb4d6}
     if(error){ setStatus('login-status', 'Đăng nhập thất bại: ' + error.message, 'err'); return; }
     $('password').value = '';
     setStatus('login-status', '');
+  };
+  $('btn-google').onclick = async () => {
+    setStatus('login-status', 'Đang chuyển sang Google...');
+    const { error } = await db.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + '/admin/models/' }
+    });
+    if(error){ setStatus('login-status', 'Không thể đăng nhập bằng Google: ' + error.message, 'err'); }
   };
   $('btn-logout').onclick = async () => { await db.auth.signOut(); };
   $('btn-refresh').onclick = loadList;
