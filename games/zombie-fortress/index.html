@@ -334,7 +334,7 @@ function drawHouseIso(px0,py0,wc,rc,s){
   polyI([isoP(cx1,cy0,zb),isoP(cx1,cy1,zb),isoP(cx1,cy1,zt),isoP(cx1,cy0,zt)],'#7a4a3a',0.7);
   polyI([isoP(cx0-0.4,cy0-0.4,zt),isoP(cx1+0.4,cy0-0.4,zt),isoP(cx1+0.4,cy1+0.4,zt),isoP(cx0-0.4,cy1+0.4,zt)],'#3d322b');
   for(let i=0;i<3;i++){
-    const ph=(t*0.35+i/3+px0*0.05)%1, sp=isoP((cx0+cx1)/2,(cy0+cy1)/2,zt);
+    const ph=((t*0.35+i/3+px0*0.05)%1+1)%1, sp=isoP((cx0+cx1)/2,(cy0+cy1)/2,zt);
     ctx.fillStyle='rgba(225,225,235,'+(0.34*(1-ph))+')';
     ctx.beginPath(); ctx.arc(sp[0]+Math.sin(ph*4+i)*2,sp[1]-ph*s*1.1,1.4+ph*3.4,0,6.283); ctx.fill();
   }
