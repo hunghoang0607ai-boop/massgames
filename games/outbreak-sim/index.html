@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Đại Dịch — Mô Phỏng — MassGames</title>
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:#12141a;color:#e8e8e8;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+a{color:#8b93a7;text-decoration:none}
+a:hover{color:#f0c060}
+.hidden{display:none !important}
+.small{font-size:12px;color:#8a92a6}
+
+/* Chọn thành phố */
+#picker{height:100%;overflow-y:auto;padding:24px 20px 40px}
+#picker .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+#picker h1{margin:0;font-size:24px;color:#f0c060}
+#picker p{color:#8a92a6;margin:6px 0 20px}
+.cities{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;max-width:1000px}
+.city{background:#1a1d26;border:1px solid #2a3144;border-radius:10px;padding:16px;text-align:left;color:#eee;cursor:pointer;font:inherit}
+.city:hover{background:#243055;border-color:#3b4a78}
+.city b{display:block;font-size:16px;color:#f0c060;margin-bottom:4px}
+.city span{font-size:12px;color:#8a92a6}
+
+/* Màn chơi */
+#game{position:fixed;inset:0}
+#board{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:pointer}
+.panel{position:absolute;background:rgba(18,20,26,.88);border:1px solid #2a3144;border-radius:10px;padding:10px 14px;backdrop-filter:blur(4px);z-index:2}
+#hud{top:12px;left:12px;width:280px}
+#hud h2{margin:0 0 4px;font-size:16px;color:#f0c060}
+#hud .stat{display:flex;justify-content:space-between;font-size:13px;margin:3px 0}
+#hud .stat b{color:#fff}
+#hud .msg{margin-top:8px;font-size:13px;color:#cfd6e4;min-height:18px}
+#sel{bottom:12px;left:12px;width:320px}
+#sel h3{margin:0 0 4px;font-size:15px;color:#f0c060}
+#sel .row{font-size:13px;margin:2px 0;color:#cfd6e4}
+#sel button{margin-top:8px;width:100%;background:#2a3144;color:#eee;border:1px solid #47506a;border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;cursor:pointer}
+#sel button:hover:not(:disabled){background:#384262}
+#sel button:disabled{opacity:.4;cursor:not-allowed}
+#log{top:12px;right:12px;width:300px;font-size:12px;color:#cfd6e4}
+#log div{padding:3px 0;border-bottom:1px solid #222838}
+#log div:first-child{color:#fff}
+.topbtns{position:absolute;right:12px;bottom:12px;z-index:2;display:flex;gap:8px}
+.btn{background:#2a3144;color:#eee;border:1px solid #47506a;border-radius:8px;padding:8px 12px;font:inherit;font-size:13px;cursor:pointer;display:inline-block}
+.btn:hover{background:#384262}
+#banner{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(18,20,26,.94);border:1px solid #3b4a78;border-radius:12px;padding:20px 26px;text-align:center;z-index:3;font-size:15px;max-width:90%}
+#banner h2{margin:0 0 8px;color:#f0c060}
+#banner .btn{margin-top:12px}
+</style>
+</head>
+<body>
+
+<section id="picker">
+  <div class="top">
+    <div>
+      <h1>Đại Dịch — Mô Phỏng</h1>
+      <p>Dịch bùng phát trong thành phố. Chọn một khu làm căn cứ, cứu người và mở rộng cho đến khi cả thành phố an toàn.</p>
+    </div>
+    <a href="../../">← Trang chủ</a>
+  </div>
+  <div class="cities" id="cities"></div>
+</section>
+
+<section id="game" class="hidden">
+  <canvas id="board"></canvas>
+  <div class="panel" id="hud">
+    <h2 id="hud-city"></h2>
+    <div class="stat"><span>Giờ</span><b id="hud-t">0</b></div>
+    <div class="stat"><span>Vật tư</span><b id="hud-supplies">0</b></div>
+    <div class="stat"><span>Người sống sót</span><b id="hud-survivors">0</b></div>
+    <div class="stat"><span>Khu an toàn</span><b id="hud-players">0/0</b></div>
+    <div class="stat"><span>Khu bị dịch</span><b id="hud-infected">0</b></div>
+    <div class="msg" id="hud-msg"></div>
+  </div>
+  <div class="panel" id="sel"></div>
+  <div class="panel" id="log"></div>
+  <div class="topbtns">
+    <button class="btn" id="btn-restart">Chơi lại</button>
+    <button class="btn" id="btn-change">Chọn thành phố khác</button>
+    <a class="btn" href="../../">Trang chủ</a>
+  </div>
+  <div id="banner" class="hidden"></div>
+</section>
+
+<script>
+(function(){
+  const CITIES = [
+    { id:'hanoi', name:'Hà Nội', country:'Việt Nam' },
+    { id:'hcm', name:'TP. Hồ Chí Minh', country:'Việt Nam' },
+    { id:'danang', name:'Đà Nẵng', country:'Việt Nam' },
+    { id:'tokyo', name:'Tokyo', country:'Nhật Bản' },
+    { id:'singapore', name:'Singapore', country:'Singapore' },
+    { id:'paris', name:'Paris', country:'Pháp' },
+    { id:'london', name:'London', country:'Anh' },
+    { id:'newyork', name:'New York', country:'Hoa Kỳ' }
+  ];
+  // Cân bằng (đơn vị: nghìn người, vật tư)
+  const GRID = 6;                 // lưới 6 x 6 = 36 khu
+  const TICK_MS = 1000;
+  const COST = { rescue:20, expand:40, fortify:25 };
+  const RESCUE_GAIN = 6, RESCUE_DROP = 35, FORTIFY_DROP = 40;
+
+  const $ = id => document.getElementById(id);
+  const board = $('board');
+  const ctx = board.getContext('2d');
+  let cityNow = null;
+  let G = null;       // trạng thái ván chơi
+  let timer = null;
+
+  // ---------- Chọn thành phố ----------
+  const list = $('cities');
+  CITIES.forEach(c=>{
+    const b=document.createElement('button');
+    b.className='city';
+    b.innerHTML='<b></b><span></span>';
+    b.querySelector('b').textContent=c.name;
+    b.querySelector('span').textContent=c.country;
+    b.onclick=()=>{ cityNow=c; newGame(c); showGame(); };
+    list.appendChild(b);
+  });
+  function showPicker(){ stopTimer(); G=null; $('game').classList.add('hidden'); $('picker').classList.remove('hidden'); }
+  function showGame(){
+    $('picker').classList.add('hidden'); $('game').classList.remove('hidden');
+    resize(); render();
+  }
+
+  // ---------- Ván chơi ----------
+  function newGame(c){
+    stopTimer();
+    const ds=[];
+    for(let r=0;r<GRID;r++) for(let k=0;k<GRID;k++){
+      ds.push({ id:'d'+r+'_'+k, r, k, name:'Khu '+String.fromCharCode(65+r)+(k+1),
+        pop:30+Math.floor(Math.random()*170), state:'none', zombies:0, infection:0, survivors:0, nb:[] });
+    }
+    const at=(r,k)=>ds[r*GRID+k];
+    ds.forEach(d=>{
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dr,dk])=>{
+        const n=at(d.r+dr,d.k+dk); if(n && d.r+dr>=0 && d.r+dr<GRID && d.k+dk>=0 && d.k+dk<GRID) d.nb.push(n);
+      });
+    });
+    G={ city:c, districts:ds, phase:'pick', t:0, supplies:100, selected:null, log:[], msg:'Chọn một khu làm căn cứ để bắt đầu.' };
+    addLog('Ván mới ở '+c.name+'. Chọn khu làm căn cứ.');
+  }
+
+  function infect(d, zombies, silent){
+    const wasPlayer=d.state==='player';
+    const lost=wasPlayer?d.survivors:0;
+    d.state='infected'; d.zombies=zombies; d.infection=0; d.survivors=0;
+    if(!silent) addLog(wasPlayer?'Dịch xâm nhập '+d.name+', mất '+Math.round(lost)+'k người':'Dịch lan đến '+d.name);
+  }
+
+  function startAt(d){
+    d.state='player'; d.survivors=Math.round(d.pop*0.5); d.infection=0;
+    let far=null,best=-1;
+    G.districts.forEach(x=>{ if(x===d) return; const dist=Math.hypot(x.r-d.r,x.k-d.k); if(dist>best){ best=dist; far=x; } });
+    if(far) infect(far,35,true);
+    G.phase='play';
+    G.msg='Dịch bùng phát ở '+(far?far.name:'?')+'. Bảo vệ căn cứ và mở rộng.';
+    addLog('Căn cứ: '+d.name+'. Ổ dịch: '+(far?far.name:'?')+'.');
+    startTimer(); render();
+  }
+
+  function tick(){
+    if(!G||G.phase!=='play') return;
+    G.t++;
+    const infected=G.districts.filter(d=>d.state==='infected');
+    infected.forEach(d=>{ d.zombies=Math.min(100,d.zombies+0.5); });
+    infected.forEach(d=>{
+      d.nb.forEach(n=>{
+        if(n.state==='infected') return;
+        n.infection+=1.2*(d.zombies/100);
+        if(n.infection>=100) infect(n,30,false);
+      });
+    });
+    G.districts.forEach(d=>{
+      if(d.state==='player'){ d.infection=Math.max(0,d.infection-0.2); G.supplies+=d.survivors*0.06; }
+      else if(d.state==='none'){ d.infection=Math.max(0,d.infection-0.1); }
+    });
+    const players=G.districts.filter(d=>d.state==='player').length;
+    if(players===0){ G.phase='lost'; stopTimer(); G.msg='Thất bại: không còn khu nào an toàn.'; addLog(G.msg); showBanner('Thất bại','Dịch đã chiếm toàn bộ căn cứ.'); }
+    else if(players===G.districts.length){ G.phase='won'; stopTimer(); G.msg='Chiến thắng: cả thành phố đã an toàn!'; addLog(G.msg); showBanner('Chiến thắng','Bạn đã giải phóng '+G.city.name+' khỏi dịch.'); }
+    render();
+  }
+
+  function startTimer(){ stopTimer(); timer=setInterval(tick,TICK_MS); }
+  function stopTimer(){ if(timer){ clearInterval(timer); timer=null; } }
+  function addLog(text){ G.log.unshift('Giờ '+G.t+': '+text); if(G.log.length>40) G.log.length=40; }
+
+  // ---------- Hành động ----------
+  function actionFor(d){
+    const adj=d.nb.filter(n=>n.state==='player');
+    if(G.phase!=='play') return { label:'Ván đã kết thúc', enabled:false };
+    if(d.state==='infected'){
+      if(!adj.length) return { label:'Cần khu an toàn kề bên để cứu người', enabled:false };
+      return { label:'Cứu người (−'+COST.rescue+' vật tư)', enabled:G.supplies>=COST.rescue, run:()=>rescue(d,adj) };
+    }
+    if(d.state==='none'){
+      if(!adj.length) return { label:'Cần khu an toàn kề bên để mở rộng', enabled:false };
+      return { label:'Mở rộng về khu này (−'+COST.expand+' vật tư)', enabled:G.supplies>=COST.expand, run:()=>expand(d) };
+    }
+    return { label:'Củng cố phòng thủ (−'+COST.fortify+' vật tư)', enabled:G.supplies>=COST.fortify, run:()=>fortify(d) };
+  }
+
+  function rescue(d,adj){
+    G.supplies-=COST.rescue;
+    d.zombies-=RESCUE_DROP;
+    const home=adj.slice().sort((a,b)=>b.survivors-a.survivors)[0];
+    home.survivors+=RESCUE_GAIN;
+    if(d.zombies<=0){ d.state='player'; d.zombies=0; d.infection=0; d.survivors=Math.round(d.pop*0.15); addLog('Giải phóng '+d.name+'!'); }
+    else addLog('Cứu '+RESCUE_GAIN+'k người từ '+d.name+' (còn '+Math.round(d.zombies)+'% zombie).');
+    render();
+  }
+  function expand(d){
+    G.supplies-=COST.expand;
+    d.state='player'; d.infection=0; d.survivors=Math.round(d.pop*0.25);
+    addLog('Mở rộng sang '+d.name+' (+'+d.survivors+'k người).');
+    render();
+  }
+  function fortify(d){
+    G.supplies-=COST.fortify;
+    d.infection=Math.max(0,d.infection-FORTIFY_DROP);
+    addLog('Củng cố '+d.name+'.');
+    render();
+  }
+
+  // ---------- Vẽ bản đồ ----------
+  let layout=null;   // vị trí các ô để vẽ và nhận click
+  function resize(){
+    const dpr=window.devicePixelRatio||1;
+    board.width=Math.floor(window.innerWidth*dpr);
+    board.height=Math.floor(window.innerHeight*dpr);
+    board.style.width=window.innerWidth+'px';
+    board.style.height=window.innerHeight+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    computeLayout();
+    render();
+  }
+  function computeLayout(){
+    const W=window.innerWidth, H=window.innerHeight;
+    const top=90, bottom=150, side=340;   // chừa chỗ cho các bảng điều khiển
+    const availW=Math.max(200,W-side*2), availH=Math.max(200,H-top-bottom);
+    const cell=Math.floor(Math.min(availW/GRID,availH/GRID));
+    const gridW=cell*GRID, gridH=cell*GRID;
+    layout={ cell, x0:Math.floor((W-gridW)/2), y0:Math.floor(top+(availH-gridH)/2) };
+  }
+
+  function colorFor(d){
+    if(d.state==='player') return '#2f7d4a';
+    if(d.state==='infected') return 'rgba(170,40,40,'+(0.35+0.5*(d.zombies/100)).toFixed(2)+')';
+    return '#343b4d';
+  }
+
+  function render(){
+    if(!G) return;
+    const W=window.innerWidth, H=window.innerHeight;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#12141a'; ctx.fillRect(0,0,W,H);
+    const {cell,x0,y0}=layout;
+    G.districts.forEach(d=>{
+      const x=x0+d.k*cell+3, y=y0+d.r*cell+3, s=cell-6;
+      ctx.fillStyle=colorFor(d);
+      roundRect(x,y,s,s,8); ctx.fill();
+      // Nguy cơ dịch ở khu chưa bị dịch hoặc khu an toàn
+      if(d.state!=='infected' && d.infection>0){
+        ctx.fillStyle='rgba(240,140,60,'+Math.min(0.6,d.infection/160).toFixed(2)+')';
+        roundRect(x,y,s,s,8); ctx.fill();
+      }
+      if(G.selected===d.id){ ctx.strokeStyle='#ffffff'; ctx.lineWidth=3; roundRect(x,y,s,s,8); ctx.stroke(); }
+      ctx.fillStyle='rgba(255,255,255,0.85)';
+      ctx.font=Math.max(10,Math.floor(cell/5))+'px system-ui';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(d.name, x+s/2, y+s/2 - (d.state==='player'?6:0));
+      if(d.state==='player'){
+        ctx.font=Math.max(9,Math.floor(cell/6))+'px system-ui';
+        ctx.fillText(Math.round(d.survivors)+'k', x+s/2, y+s/2+10);
+      }
+    });
+    updateHud();
+  }
+
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+
+  function districtAt(px,py){
+    if(!layout||!G) return null;
+    const {cell,x0,y0}=layout;
+    const k=Math.floor((px-x0)/cell), r=Math.floor((py-y0)/cell);
+    if(r<0||k<0||r>=GRID||k>=GRID) return null;
+    return G.districts[r*GRID+k];
+  }
+
+  board.addEventListener('click',e=>{
+    if(!G) return;
+    const rect=board.getBoundingClientRect();
+    const d=districtAt(e.clientX-rect.left, e.clientY-rect.top);
+    if(!d) return;
+    if(G.phase==='pick'){ startAt(d); return; }
+    G.selected=d.id; render();
+  });
+
+  // ---------- Giao diện ----------
+  function updateHud(){
+    const players=G.districts.filter(d=>d.state==='player');
+    const infected=G.districts.filter(d=>d.state==='infected').length;
+    const people=players.reduce((s,d)=>s+d.survivors,0);
+    $('hud-city').textContent=G.city.name;
+    $('hud-t').textContent=G.t;
+    $('hud-supplies').textContent=Math.floor(G.supplies);
+    $('hud-survivors').textContent=Math.round(people)+'k';
+    $('hud-players').textContent=players.length+'/'+G.districts.length;
+    $('hud-infected').textContent=infected;
+    $('hud-msg').textContent=G.msg||'';
+
+    const sel=$('sel'); sel.textContent='';
+    const d=G.districts.find(x=>x.id===G.selected);
+    if(!d){
+      const p=document.createElement('div'); p.className='row';
+      p.textContent=G.phase==='pick'?'Nhấn vào một khu để chọn làm căn cứ.':'Nhấn vào một khu để xem và hành động.';
+      sel.appendChild(p);
+    } else {
+      const h=document.createElement('h3'); h.textContent=d.name; sel.appendChild(h);
+      const st=d.state==='player'?'An toàn (của bạn)':d.state==='infected'?'Đang bị dịch':'Chưa kiểm soát';
+      [['Trạng thái',st],['Dân số',d.pop+'k']].forEach(([a,b])=>{ const r=document.createElement('div'); r.className='row'; r.textContent=a+': '+b; sel.appendChild(r); });
+      const info=document.createElement('div'); info.className='row';
+      if(d.state==='player') info.textContent='Người sống sót: '+Math.round(d.survivors)+'k · Nguy cơ dịch: '+Math.round(d.infection)+'%';
+      else if(d.state==='infected') info.textContent='Mật độ zombie: '+Math.round(d.zombies)+'%';
+      else info.textContent='Nguy cơ bị dịch: '+Math.round(d.infection)+'%';
+      sel.appendChild(info);
+      const a=actionFor(d);
+      const btn=document.createElement('button'); btn.textContent=a.label; btn.disabled=!(a.enabled&&a.run);
+      btn.onclick=()=>{ if(a.run) a.run(); };
+      sel.appendChild(btn);
+    }
+
+    const lg=$('log'); lg.textContent='';
+    G.log.slice(0,8).forEach(t=>{ const div=document.createElement('div'); div.textContent=t; lg.appendChild(div); });
+  }
+
+  function showBanner(title,text){
+    const b=$('banner'); b.textContent='';
+    const h=document.createElement('h2'); h.textContent=title; b.appendChild(h);
+    const p=document.createElement('div'); p.textContent=text; b.appendChild(p);
+    const again=document.createElement('button'); again.className='btn'; again.textContent='Chơi lại';
+    again.onclick=()=>{ b.classList.add('hidden'); restart(); };
+    b.appendChild(again);
+    b.classList.remove('hidden');
+  }
+
+  function restart(){
+    if(!cityNow) return showPicker();
+    $('banner').classList.add('hidden');
+    newGame(cityNow); render();
+  }
+
+  window.addEventListener('resize',resize);
+  $('btn-restart').onclick=restart;
+  $('btn-change').onclick=()=>{ $('banner').classList.add('hidden'); showPicker(); };
+})();
+</script>
+</body>
+</html>
