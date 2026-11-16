@@ -32,27 +32,41 @@ label{display:block;font-size:12px;color:#8b93a7;margin:10px 0 3px}
 .nav button:hover{background:#1a1d26}
 .nav button.active{background:#243055;border-color:#3b4a78;color:#fff}
 .nav button .sub{display:block;font-size:11px;color:#7d86a0;margin-top:2px}
-.sidebar .foot{padding:12px 16px;border-top:1px solid #2a3144;display:flex;justify-content:space-between;align-items:center}
+.sidebar .foot{padding:12px 16px;border-top:1px solid #2a3144;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .sidebar .foot button{margin:0}
 
 .content{flex:1;min-width:0;padding:20px 24px 40px}
-.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:4px;flex-wrap:wrap}
 .topbar h1{margin:0;font-size:22px;color:#f0c060}
-h2{font-size:15px;color:#c9d1e0;margin:24px 0 10px;border-bottom:1px solid #2a3144;padding-bottom:6px}
+.gamelayout{display:flex;gap:16px;margin-top:14px;align-items:flex-start}
+.subnav{width:170px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;background:#0e1016;border:1px solid #2a3144;border-radius:10px;padding:6px}
+.subnav button{text-align:left;background:transparent;border:1px solid transparent;color:#cfd6e4;border-radius:8px;padding:9px 10px;margin:0;font-size:14px}
+.subnav button:hover{background:#1a1d26}
+.subnav button.active{background:#243055;border-color:#3b4a78;color:#fff}
+.panel{flex:1;min-width:0}
+h2{font-size:15px;color:#c9d1e0;margin:20px 0 10px;border-bottom:1px solid #2a3144;padding-bottom:6px}
+h2:first-child{margin-top:0}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
 .item{background:#1a1d26;border:1px solid #2a3144;border-radius:8px;padding:12px}
 .item h3{margin:0 0 8px;font-size:15px;color:#f0c060}
+.card{background:#1a1d26;border:1px solid #2a3144;border-radius:10px;padding:16px;margin-bottom:16px}
 input[type=text],input[type=email],input[type=password],input[type=number],select{width:100%;background:#0e1016;color:#eee;border:1px solid #47506a;border-radius:6px;padding:6px 8px;font-size:13px}
+input[type=file]{color:#cfd6e4;margin-top:4px}
 input[type=color]{width:100%;height:30px;background:#0e1016;border:1px solid #47506a;border-radius:6px;padding:2px}
 button{background:#2a3144;color:#eee;border:1px solid #47506a;border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer;margin-top:10px}
 button:hover:not(:disabled){background:#384262}
 button:disabled{opacity:.4;cursor:not-allowed}
 button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
+button.danger{background:#5a2a2a;border-color:#7a3a3a}
 .status{margin-top:10px;min-height:20px;white-space:pre-wrap}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .empty{background:#1a1d26;border:1px dashed #3a4262;border-radius:10px;padding:24px;color:#8a92a6}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid #2a3144;vertical-align:top}
+th{color:#8b93a7;font-weight:normal;font-size:12px}
+.use{color:#c9d1e0;font-size:12px}
+.use .none{color:#6b7390}
 
-/* Màn hình hẹp */
 @media (max-width:760px){
   #app-view{flex-direction:column}
   .sidebar{width:100%;height:auto;position:static;border-right:0;border-bottom:1px solid #2a3144}
@@ -60,6 +74,9 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
   .nav button{white-space:nowrap;width:auto;margin:0}
   .nav button .sub{display:none}
   .content{padding:14px}
+  .gamelayout{flex-direction:column}
+  .subnav{width:100%;flex-direction:row}
+  .subnav button{flex:1;text-align:center}
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -103,22 +120,27 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
     </div>
     <div class="small" id="page-sub"></div>
     <div class="status" id="global-status"></div>
-    <div id="game-body"></div>
+    <div class="gamelayout" id="game-body"></div>
   </main>
 </div>
 
 <script>
 (function(){
   const cfg = window.MASSGAMES_CONFIG;
+  const BUCKET = 'models-3d';
+  const MAX_BYTES = 100 * 1024 * 1024;
   const db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY, {
     auth: { persistSession: true, autoRefreshToken: true }
   });
   const $ = id => document.getElementById(id);
   let games = [];
-  let assets = [];
+  let assets = [];          // assets_3d (dùng chung cho mọi game)
+  let allEntities = [];     // game_entities của mọi game, để biết mô hình nào đang được dùng ở đâu
   let currentSlug = null;
+  let currentTab = 'config';
+  let currentConfig = {};   // map 'kind:key' -> config của game đang mở
 
-  // Cấu hình 3D theo từng game. Game chưa có khai báo sẽ hiện thông báo.
+  // Cấu hình 3D theo từng game. Game chưa có khai báo sẽ không có mục Cấu hình.
   const SCHEMAS = {
     'zombie-fortress': {
       tower: {
@@ -140,8 +162,11 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
     }
   };
   const GROUPS = [['tower','Tháp'],['zombie','Loại zombie'],['building','Công trình']];
+  const KIND_LABEL = { tower:'Tháp', zombie:'Zombie', building:'Công trình' };
 
   function setStatus(id,msg,cls){ const el=$(id); el.textContent=msg; el.className='status '+(cls||''); }
+  function fmtSize(b){ if(!b && b!==0) return ''; if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
+  function safeName(s){ return s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60) || 'model'; }
 
   // ---------- Đăng nhập ----------
   function showAuth(session){
@@ -165,7 +190,6 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
     const nav=$('game-nav'); nav.textContent='';
     games.forEach(g=>{
       const b=document.createElement('button');
-      b.dataset.slug=g.slug;
       b.className=g.slug===currentSlug?'active':'';
       b.textContent=g.title||g.slug;
       const s=document.createElement('span'); s.className='sub';
@@ -182,41 +206,57 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
     const g=games.find(x=>x.slug===slug);
     $('page-title').textContent=g?(g.title||slug):slug;
     $('page-sub').textContent='Mã game: '+slug;
-    setStatus('global-status','');
-    const body=$('game-body'); body.textContent='';
-    if(!SCHEMAS[slug]){
-      const d=document.createElement('div'); d.className='empty';
-      d.textContent='Game này chưa có mục cấu hình 3D. Hiện chỉ Pháo Đài Sống Sót có cấu hình.';
-      body.appendChild(d); return;
-    }
-    setStatus('global-status','Đang tải cấu hình...');
+    setStatus('global-status','Đang tải...');
     const [rowsRes, assetsRes] = await Promise.all([
-      db.from('game_entities').select('kind,key,config').eq('game_slug',slug),
-      db.from('assets_3d').select('id,name,storage_path,format').order('created_at',{ascending:false})
+      db.from('game_entities').select('game_slug,kind,key,config'),
+      db.from('assets_3d').select('id,name,storage_path,format,size_bytes,created_at').order('created_at',{ascending:false})
     ]);
-    if(currentSlug!==slug) return; // người dùng đã chuyển game khác
-    if(rowsRes.error){ setStatus('global-status','Lỗi tải cấu hình: '+rowsRes.error.message,'err'); return; }
-    assets = assetsRes.data || [];
-    const map={};
-    (rowsRes.data||[]).forEach(r=>{ map[r.kind+':'+r.key]=r.config||{}; });
-    renderGame(slug,map,body);
+    if(currentSlug!==slug) return; // người dùng đã chuyển sang game khác
+    if(rowsRes.error||assetsRes.error){ setStatus('global-status','Lỗi tải dữ liệu: '+((rowsRes.error||assetsRes.error).message),'err'); return; }
     setStatus('global-status','');
+    assets = assetsRes.data || [];
+    allEntities = rowsRes.data || [];
+    currentConfig = {};
+    allEntities.filter(r=>r.game_slug===slug).forEach(r=>{ currentConfig[r.kind+':'+r.key]=r.config||{}; });
+    renderLayout();
   }
 
-  function renderGame(slug,map,body){
-    const schema=SCHEMAS[slug];
+  // ---------- Khung: thanh con (Cấu hình | 3D Object) + nội dung ----------
+  function renderLayout(){
+    const body=$('game-body'); body.textContent='';
+    const sub=document.createElement('nav'); sub.className='subnav';
+    [['config','Cấu hình'],['objects','3D Object']].forEach(([id,label])=>{
+      const b=document.createElement('button');
+      b.textContent=label; b.className=currentTab===id?'active':'';
+      b.onclick=()=>{ currentTab=id; renderLayout(); };
+      sub.appendChild(b);
+    });
+    const panel=document.createElement('div'); panel.className='panel';
+    body.appendChild(sub); body.appendChild(panel);
+    if(currentTab==='config') renderConfig(panel); else renderObjects(panel);
+  }
+
+  // ---------- Thanh con "Cấu hình" ----------
+  function renderConfig(panel){
+    const schema=SCHEMAS[currentSlug];
+    if(!schema){
+      const d=document.createElement('div'); d.className='empty';
+      d.textContent='Game này chưa có mục cấu hình 3D. Dùng mục 3D Object để tải và xem file mô hình.';
+      panel.appendChild(d); return;
+    }
     GROUPS.forEach(([kind,label])=>{
       const defs=schema[kind]; if(!defs) return;
-      const h=document.createElement('h2'); h.textContent=label; body.appendChild(h);
+      const h=document.createElement('h2'); h.textContent=label; panel.appendChild(h);
       const grid=document.createElement('div'); grid.className='grid';
       Object.keys(defs).forEach(key=>{
-        grid.appendChild(buildCard(slug,kind,key,defs[key],map[kind+':'+key]||{}));
+        grid.appendChild(buildCard(kind,key,defs[key],currentConfig[kind+':'+key]||{}));
       });
-      body.appendChild(grid);
+      panel.appendChild(grid);
     });
   }
 
-  function buildCard(slug,kind,key,def,config){
+  function buildCard(kind,key,def,config){
+    const slug=currentSlug;
     const card=document.createElement('div'); card.className='item';
     const h=document.createElement('h3'); h.textContent=def.title; card.appendChild(h);
     const inputs={};
@@ -231,7 +271,7 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
         input.value=config.model_id||'';
       } else if(type==='color'){
         input=document.createElement('input'); input.type='color';
-        const cur=field==='color'||field.endsWith('_color') ? config[field] : null;
+        const cur=(field==='color'||field.endsWith('_color')) ? config[field] : null;
         input.value=/^#[0-9a-fA-F]{6}$/.test(cur||'')?cur:'#888888';
       } else if(type==='num'){
         input=document.createElement('input'); input.type='number'; input.step='any';
@@ -263,7 +303,111 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
     return card;
   }
 
-  // ---------- Sự kiện ----------
+  // ---------- Thanh con "3D Object": tải file, xem nơi đang dùng, xoá ----------
+  function usagesOf(assetId){
+    const list=[];
+    allEntities.forEach(r=>{
+      if(r.config && r.config.model_id===assetId){
+        const g=games.find(x=>x.slug===r.game_slug);
+        list.push(((g&&g.title)||r.game_slug)+' → '+(KIND_LABEL[r.kind]||r.kind)+': '+(SCHEMAS[r.game_slug]&&SCHEMAS[r.game_slug][r.kind]&&SCHEMAS[r.game_slug][r.kind][r.key]?SCHEMAS[r.game_slug][r.kind][r.key].title:r.key));
+      }
+    });
+    return list;
+  }
+
+  function renderObjects(panel){
+    const up=document.createElement('div'); up.className='card';
+    up.innerHTML='<h2 style="margin-top:0">Tải file 3D lên</h2>'
+      +'<label for="o-name">Tên hiển thị (để trống sẽ dùng tên file)</label>'
+      +'<input id="o-name" type="text">'
+      +'<label for="o-file">File (.glb, .gltf, .fbx, .obj; tối đa 100 MB)</label>'
+      +'<input id="o-file" type="file" accept=".glb,.gltf,.fbx,.obj">'
+      +'<div class="small" style="margin-top:6px">Game chỉ hiển thị được .glb và .gltf. File .fbx và .obj vẫn lưu được nhưng sẽ không hiện trong game.</div>'
+      +'<div class="row"><button class="go" id="o-upload">Tải lên</button></div>'
+      +'<div class="status" id="o-status"></div>';
+    panel.appendChild(up);
+
+    const list=document.createElement('div'); list.className='card';
+    list.innerHTML='<h2 style="margin-top:0">Danh sách file 3D</h2><div class="status" id="o-list-status"></div><div id="o-table"></div>';
+    panel.appendChild(list);
+
+    up.querySelector('#o-upload').onclick=uploadAsset;
+    renderAssetTable();
+  }
+
+  function renderAssetTable(){
+    const host=document.getElementById('o-table'); if(!host) return;
+    host.textContent='';
+    if(!assets.length){ setStatus('o-list-status','Chưa có file 3D nào.'); return; }
+    setStatus('o-list-status','');
+    const table=document.createElement('table');
+    table.innerHTML='<thead><tr><th>Tên</th><th>Định dạng</th><th>Dung lượng</th><th>Đang gán cho</th><th></th></tr></thead>';
+    const tbody=document.createElement('tbody');
+    assets.forEach(a=>{
+      const tr=document.createElement('tr');
+      const tdName=document.createElement('td'); tdName.textContent=a.name; tr.appendChild(tdName);
+      const tdFmt=document.createElement('td'); tdFmt.textContent=(a.format||'').toUpperCase(); tr.appendChild(tdFmt);
+      const tdSize=document.createElement('td'); tdSize.textContent=fmtSize(a.size_bytes); tr.appendChild(tdSize);
+      const tdUse=document.createElement('td'); tdUse.className='use';
+      const uses=usagesOf(a.id);
+      if(!uses.length){ const n=document.createElement('span'); n.className='none'; n.textContent='Chưa gán'; tdUse.appendChild(n); }
+      else uses.forEach(u=>{ const d=document.createElement('div'); d.textContent=u; tdUse.appendChild(d); });
+      tr.appendChild(tdUse);
+      const tdAct=document.createElement('td');
+      const del=document.createElement('button'); del.className='danger'; del.style.margin='0'; del.textContent='Xoá';
+      del.onclick=()=>deleteAsset(a,uses);
+      tdAct.appendChild(del); tr.appendChild(tdAct);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody); host.appendChild(table);
+  }
+
+  async function reloadAssets(){
+    const [a,e]=await Promise.all([
+      db.from('assets_3d').select('id,name,storage_path,format,size_bytes,created_at').order('created_at',{ascending:false}),
+      db.from('game_entities').select('game_slug,kind,key,config')
+    ]);
+    if(!a.error) assets=a.data||[];
+    if(!e.error) allEntities=e.data||[];
+    renderAssetTable();
+  }
+
+  async function uploadAsset(){
+    const file=document.getElementById('o-file').files[0];
+    const displayName=document.getElementById('o-name').value.trim()||(file?file.name:'');
+    const btn=document.getElementById('o-upload');
+    if(!file){ setStatus('o-status','Chọn một file trước.','err'); return; }
+    if(file.size>MAX_BYTES){ setStatus('o-status','File vượt quá 100 MB.','err'); return; }
+    const ext=file.name.split('.').pop().toLowerCase();
+    if(!['glb','gltf','fbx','obj'].includes(ext)){ setStatus('o-status','Định dạng không hỗ trợ.','err'); return; }
+    btn.disabled=true;
+    const path=Date.now()+'-'+safeName(file.name.replace(/\.[^.]+$/,''))+'.'+ext;
+    setStatus('o-status','Đang tải lên '+fmtSize(file.size)+'...');
+    const up=await db.storage.from(BUCKET).upload(path,file,{
+      cacheControl:'3600',upsert:false,
+      contentType: ext==='glb'?'model/gltf-binary':ext==='gltf'?'model/gltf+json':'application/octet-stream'
+    });
+    if(up.error){ setStatus('o-status','Lỗi tải file: '+up.error.message,'err'); btn.disabled=false; return; }
+    const ins=await db.from('assets_3d').insert({name:displayName,storage_path:path,format:ext,size_bytes:file.size});
+    btn.disabled=false;
+    if(ins.error){ await db.storage.from(BUCKET).remove([path]); setStatus('o-status','Lỗi lưu thông tin: '+ins.error.message,'err'); return; }
+    setStatus('o-status','Đã tải lên: '+displayName,'ok');
+    document.getElementById('o-name').value=''; document.getElementById('o-file').value='';
+    reloadAssets();
+  }
+
+  async function deleteAsset(a,uses){
+    let msg='Xoá file "'+a.name+'"? Không thể hoàn tác.';
+    if(uses.length) msg+='\n\nFile đang được gán cho '+uses.length+' mục; sau khi xoá các mục đó sẽ dùng hình mặc định:\n- '+uses.join('\n- ');
+    if(!confirm(msg)) return;
+    const r1=await db.storage.from(BUCKET).remove([a.storage_path]);
+    if(r1.error){ setStatus('o-list-status','Lỗi xoá file: '+r1.error.message,'err'); return; }
+    const r2=await db.from('assets_3d').delete().eq('id',a.id);
+    if(r2.error){ setStatus('o-list-status','Lỗi xoá bản ghi: '+r2.error.message,'err'); return; }
+    reloadAssets();
+  }
+
+  // ---------- Đăng nhập / sự kiện ----------
   $('btn-login').onclick=async()=>{
     setStatus('login-status','Đang đăng nhập...');
     const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
