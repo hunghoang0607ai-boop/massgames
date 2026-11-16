@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>My City — MassGames</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../../assets/config.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
 <style>
@@ -59,7 +61,7 @@ a:hover{color:#f0c060}
     <div class="panel">
       <h2 id="city-name"></h2>
       <div class="small">Kéo để di chuyển · Giữ chuột phải hoặc Ctrl + kéo để xoay · Shift + kéo để nghiêng</div>
-      <div class="small">Ranh giới: OpenStreetMap (Nominatim)</div>
+      <div class="small">Ranh giới: OpenStreetMap</div>
     </div>
     <div class="btns">
       <button class="btn" id="btn-change">Chọn thành phố khác</button>
@@ -119,17 +121,14 @@ a:hover{color:#f0c060}
   }
 
   // ---- Ranh giới thành phố ----
+  // Ranh giới được admin lưu trong bảng city_boundaries của Supabase
+  const cfgSb = window.MASSGAMES_CONFIG;
+  const sb = window.supabase.createClient(cfgSb.SUPABASE_URL, cfgSb.SUPABASE_PUBLISHABLE_KEY, { auth:{ persistSession:false } });
   async function fetchBoundary(c){
-    const key='mc-boundary-v1-'+c.id;
-    try{ const cached=localStorage.getItem(key); if(cached) return JSON.parse(cached); }catch(e){}
-    const url='https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&limit=5&accept-language=vi&q='+encodeURIComponent(c.q);
-    const r=await fetch(url);
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const arr=await r.json();
-    const hit=(arr||[]).find(x=>x.geojson&&(x.geojson.type==='Polygon'||x.geojson.type==='MultiPolygon'));
-    if(!hit) throw new Error('không có dữ liệu ranh giới');
-    try{ localStorage.setItem(key,JSON.stringify(hit.geojson)); }catch(e){}
-    return hit.geojson;
+    const {data,error}=await sb.from('city_boundaries').select('geojson').eq('city_id',c.id).maybeSingle();
+    if(error) throw new Error(error.message);
+    if(!data) throw new Error('chưa có dữ liệu, admin cần tải lên');
+    return data.geojson;
   }
 
   // Mặt nạ: toàn thế giới trừ đi phần thành phố (các vòng ngoài của mọi đa giác thành phố là lỗ)

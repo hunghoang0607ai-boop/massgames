@@ -271,7 +271,9 @@ window.dispatchEvent(new Event('mgthumb-ready'));
   function renderLayout(){
     const body=$('game-body'); body.textContent='';
     const sub=document.createElement('nav'); sub.className='subnav';
-    [['config','Cấu hình'],['objects','3D Object']].forEach(([id,label])=>{
+    const tabs=[['config','Cấu hình'],['objects','3D Object']];
+    if(currentSlug==='my-city') tabs.push(['boundaries','Ranh giới thành phố']);
+    tabs.forEach(([id,label])=>{
       const b=document.createElement('button');
       b.textContent=label; b.className=currentTab===id?'active':'';
       b.onclick=()=>{ currentTab=id; renderLayout(); };
@@ -279,7 +281,9 @@ window.dispatchEvent(new Event('mgthumb-ready'));
     });
     const panel=document.createElement('div'); panel.className='panel';
     body.appendChild(sub); body.appendChild(panel);
-    if(currentTab==='config') renderConfig(panel); else renderObjects(panel);
+    if(currentTab==='config') renderConfig(panel);
+    else if(currentTab==='boundaries') renderBoundaries(panel);
+    else renderObjects(panel);
   }
 
   // ---------- Thanh con "Cấu hình" ----------
@@ -574,6 +578,67 @@ window.dispatchEvent(new Event('mgthumb-ready'));
     const err=await removeAssets([a]);
     if(err){ setStatus('o-list-status',err,'err'); return; }
     reloadAssets();
+  }
+
+  // ---------- Thanh con "Ranh giới thành phố" (game My City) ----------
+  const CITY_BOUNDARIES=[
+    {id:'hanoi',name:'Hà Nội'},{id:'hcm',name:'TP. Hồ Chí Minh'},{id:'danang',name:'Đà Nẵng'},{id:'tokyo',name:'Tokyo'},
+    {id:'singapore',name:'Singapore'},{id:'paris',name:'Paris'},{id:'london',name:'London'},{id:'newyork',name:'New York'}
+  ];
+
+  // Lấy ranh giới Polygon/MultiPolygon từ: Geometry, Feature, FeatureCollection, hoặc kết quả Nominatim (mảng)
+  function geometryFrom(json){
+    const pick=g=>(g&&(g.type==='Polygon'||g.type==='MultiPolygon'))?g:null;
+    if(Array.isArray(json)){ for(const x of json){ const g=pick(x&&x.geojson); if(g) return g; } return null; }
+    if(json&&json.type==='Feature') return pick(json.geometry);
+    if(json&&json.type==='FeatureCollection'){ for(const f of json.features||[]){ const g=pick(f.geometry); if(g) return g; } return null; }
+    return pick(json);
+  }
+
+  async function renderBoundaries(panel){
+    const card=document.createElement('div'); card.className='card';
+    card.innerHTML='<h2 style="margin-top:0">Ranh giới thành phố</h2>'
+      +'<div class="small">Tải file GeoJSON hoặc JSON kết quả Nominatim của từng thành phố. Game chỉ đọc dữ liệu đã lưu ở đây.</div>'
+      +'<div class="status" id="b-status"></div><div id="b-table"></div>';
+    panel.appendChild(card);
+    const {data,error}=await db.from('city_boundaries').select('city_id,updated_at');
+    if(error){ setStatus('b-status','Lỗi tải: '+error.message,'err'); return; }
+    const have=new Map((data||[]).map(r=>[r.city_id,r.updated_at]));
+    const table=document.createElement('table');
+    table.innerHTML='<thead><tr><th>Thành phố</th><th>Trạng thái</th><th>File ranh giới</th><th></th></tr></thead>';
+    const tbody=document.createElement('tbody');
+    CITY_BOUNDARIES.forEach(c=>{
+      const tr=document.createElement('tr');
+      const t1=document.createElement('td'); t1.textContent=c.name; tr.appendChild(t1);
+      const t2=document.createElement('td');
+      const setState=(ts)=>{ t2.textContent=ts?('Đã có · '+new Date(ts).toLocaleString('vi-VN')):'Chưa có'; t2.className=ts?'ok':'small'; };
+      setState(have.get(c.id)); tr.appendChild(t2);
+      const t3=document.createElement('td'); const f=document.createElement('input'); f.type='file'; f.accept='.json,.geojson,application/json'; t3.appendChild(f); tr.appendChild(t3);
+      const t4=document.createElement('td'); const b=document.createElement('button'); b.className='go'; b.style.margin='0'; b.textContent='Lưu';
+      b.onclick=()=>saveBoundary(c,f,b,setState);
+      t4.appendChild(b); tr.appendChild(t4);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    document.getElementById('b-table').appendChild(table);
+  }
+
+  async function saveBoundary(c,input,btn,setState){
+    const file=input.files&&input.files[0];
+    if(!file){ setStatus('b-status','Chọn file cho '+c.name+'.','err'); return; }
+    if(file.size>5*1024*1024){ setStatus('b-status','File quá lớn (tối đa 5 MB).','err'); return; }
+    let geom=null;
+    try{ geom=geometryFrom(JSON.parse(await file.text())); }
+    catch(e){ setStatus('b-status',c.name+': file không phải JSON hợp lệ.','err'); return; }
+    if(!geom){ setStatus('b-status',c.name+': không tìm thấy ranh giới Polygon/MultiPolygon trong file.','err'); return; }
+    btn.disabled=true;
+    const now=new Date().toISOString();
+    const {error}=await db.from('city_boundaries').upsert({city_id:c.id,name:c.name,geojson:geom,updated_at:now},{onConflict:'city_id'});
+    btn.disabled=false;
+    if(error){ setStatus('b-status','Lỗi lưu '+c.name+': '+error.message,'err'); return; }
+    setState(now);
+    input.value='';
+    setStatus('b-status','Đã lưu ranh giới '+c.name+'.','ok');
   }
 
   // ---------- Đăng nhập / sự kiện ----------
