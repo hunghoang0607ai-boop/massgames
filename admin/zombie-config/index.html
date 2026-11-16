@@ -181,6 +181,8 @@ window.dispatchEvent(new Event('mgthumb-ready'));
   let currentSlug = null;
   let currentTab = 'config';
   let selected = new Set();  // id các file 3D đang chọn để xoá
+  let armedFor = null;       // số file đang chờ xác nhận xoá (xác nhận hai bước, thay cho confirm())
+  let armedRow = null;       // id dòng đang chờ xác nhận xoá
   let currentConfig = {};   // map 'kind:key' -> config của game đang mở
 
   // Cấu hình 3D theo từng game. Game chưa có khai báo sẽ không có mục Cấu hình.
@@ -416,7 +418,7 @@ window.dispatchEvent(new Event('mgthumb-ready'));
       tr.appendChild(tdUse);
       const tdAct=document.createElement('td');
       const del=document.createElement('button'); del.className='danger'; del.style.margin='0'; del.textContent='Xoá';
-      del.onclick=()=>deleteAsset(a,uses);
+      del.onclick=()=>deleteAsset(a,uses,del);
       tdAct.appendChild(del); tr.appendChild(tdAct);
       tbody.appendChild(tr);
     });
@@ -430,7 +432,7 @@ window.dispatchEvent(new Event('mgthumb-ready'));
     const info=document.createElement('span'); info.className='small';
     info.textContent=n?('Đã chọn '+n+' file'):'Chưa chọn file nào';
     const del=document.createElement('button'); del.className='danger'; del.style.margin='0';
-    del.disabled=!n; del.textContent='Xoá đã chọn ('+n+')';
+    del.disabled=!n; del.textContent=(armedFor===n?'Xác nhận xoá (':'Xoá đã chọn (')+n+')';
     del.onclick=deleteSelected;
     const clr=document.createElement('button'); clr.style.margin='0';
     clr.disabled=!n; clr.textContent='Bỏ chọn';
@@ -441,10 +443,14 @@ window.dispatchEvent(new Event('mgthumb-ready'));
   async function deleteSelected(){
     const picked=assets.filter(a=>selected.has(a.id));
     if(!picked.length) return;
-    const inUse=picked.filter(a=>usagesOf(a.id).length).length;
-    let msg='Xoá '+picked.length+' file đã chọn? Không thể hoàn tác.';
-    if(inUse) msg+='\n\n'+inUse+' file đang được gán; các mục đó sẽ dùng hình mặc định sau khi xoá.';
-    if(!confirm(msg)) return;
+    if(armedFor!==picked.length){
+      armedFor=picked.length;
+      const inUse=picked.filter(a=>usagesOf(a.id).length).length;
+      setStatus('o-list-status','Bấm "Xác nhận xoá" lần nữa để xoá '+picked.length+' file. Không thể hoàn tác.'+(inUse?' '+inUse+' file đang được gán; các mục đó sẽ dùng hình mặc định sau khi xoá.':''),'err');
+      updateToolbar();
+      return;
+    }
+    armedFor=null;
     setStatus('o-list-status','Đang xoá '+picked.length+' file...');
     const r1=await db.storage.from(BUCKET).remove(picked.map(a=>a.storage_path));
     if(r1.error){ setStatus('o-list-status','Lỗi xoá file trong storage: '+r1.error.message,'err'); return; }
@@ -521,10 +527,14 @@ window.dispatchEvent(new Event('mgthumb-ready'));
     return '';
   }
 
-  async function deleteAsset(a,uses){
-    let msg='Xoá file "'+a.name+'"? Không thể hoàn tác.';
-    if(uses.length) msg+='\n\nFile đang được gán cho '+uses.length+' mục; sau khi xoá các mục đó sẽ dùng hình mặc định:\n- '+uses.join('\n- ');
-    if(!confirm(msg)) return;
+  async function deleteAsset(a,uses,btn){
+    if(armedRow!==a.id){
+      armedRow=a.id;
+      btn.textContent='Xác nhận xoá';
+      setStatus('o-list-status','Bấm "Xác nhận xoá" lần nữa để xoá "'+a.name+'". Không thể hoàn tác.'+(uses.length?' File đang được gán cho '+uses.length+' mục; các mục đó sẽ dùng hình mặc định sau khi xoá.':''),'err');
+      return;
+    }
+    armedRow=null;
     const r1=await db.storage.from(BUCKET).remove([a.storage_path]);
     if(r1.error){ setStatus('o-list-status','Lỗi xoá file: '+r1.error.message,'err'); return; }
     const r2=await db.from('assets_3d').delete().eq('id',a.id);
