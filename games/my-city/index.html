@@ -86,7 +86,9 @@ a:hover{color:#f0c060}
     { id:'london',    name:'London',          country:'Anh',       q:'London, United Kingdom',        lng:-0.1278,  lat:51.5074 },
     { id:'newyork',   name:'New York',        country:'Hoa Kỳ',    q:'New York City, United States',  lng:-74.0060, lat:40.7128 }
   ];
-  const VIEW = { zoom:15.5, pitch:60, bearing:-17 };
+  const VIEW = { zoom:15.5, pitch:60, bearing:-17, minZoom:10 };
+  const PAD = 0.03;   // đệm quanh ranh giới thành phố (độ)
+  function aroundBounds(c,r){ return [[c.lng-r,c.lat-r],[c.lng+r,c.lat+r]]; }
   const EMPTY = { type:'FeatureCollection', features:[] };
 
   const $ = id => document.getElementById(id);
@@ -178,6 +180,8 @@ a:hover{color:#f0c060}
     // Chỉ giữ các toà nhà nằm hoàn toàn trong ranh giới thành phố
     map.setFilter('city-3d-buildings',['within',geom]);
     const b=bboxOf(geom);
+    // Khoá khung nhìn trong thành phố, không cho kéo ra toàn thế giới
+    map.setMaxBounds([[b[0]-PAD,b[1]-PAD],[b[2]+PAD,b[3]+PAD]]);
     map.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:80,pitch:VIEW.pitch,bearing:VIEW.bearing,duration:1500,maxZoom:16.5});
   }
 
@@ -216,7 +220,7 @@ a:hover{color:#f0c060}
       map = new maplibregl.Map({
         container:'map', style:STYLE,
         center:[c.lng,c.lat], zoom:VIEW.zoom, pitch:VIEW.pitch, bearing:VIEW.bearing,
-        maxPitch:85, attributionControl:{compact:true}
+        maxPitch:85, minZoom:VIEW.minZoom, maxBounds:aroundBounds(c,0.25), attributionControl:{compact:true}
       });
       map.on('style.load', ()=>{
         styleReady=true;
@@ -229,6 +233,7 @@ a:hover{color:#f0c060}
         showNote('Lỗi bản đồ: '+msg, true);
       });
     } else {
+      map.setMaxBounds(aroundBounds(c,0.25));
       map.flyTo({ center:[c.lng,c.lat], zoom:VIEW.zoom, pitch:VIEW.pitch, bearing:VIEW.bearing, speed:1.2 });
     }
     loadCity(c);

@@ -284,7 +284,7 @@ a:hover{color:#f0c060}
     const c = cityNow;
     map = new maplibregl.Map({
       container:'map', style:STYLE, center:[c.lng,c.lat], zoom:11, pitch:50, bearing:-17,
-      maxPitch:80, attributionControl:{compact:true}
+      maxPitch:80, minZoom:10, maxBounds:aroundBounds(c,0.25), attributionControl:{compact:true}
     });
     map.on('style.load', ()=>{
       styleReady=true;
@@ -331,6 +331,8 @@ a:hover{color:#f0c060}
   }
 
   // Đặt lại lớp quận, toà nhà (chỉ trong thành phố) và khung nhìn
+  function aroundBounds(c,r){ return [[c.lng-r,c.lat-r],[c.lng+r,c.lat+r]]; }
+
   function renderMap(fit){
     if(!styleReady || !G) return;
     map.getSource('districts').setData({ type:'FeatureCollection', features: G.districts.map(d=>({
@@ -341,6 +343,8 @@ a:hover{color:#f0c060}
       map.setFilter('city-3d-buildings',['within',{type:'MultiPolygon',coordinates:polys}]);
       const bb=[Infinity,Infinity,-Infinity,-Infinity];
       G.districts.forEach(d=>{ bb[0]=Math.min(bb[0],d.bbox[0]); bb[1]=Math.min(bb[1],d.bbox[1]); bb[2]=Math.max(bb[2],d.bbox[2]); bb[3]=Math.max(bb[3],d.bbox[3]); });
+      // Khoá khung nhìn trong thành phố, không cho kéo ra toàn thế giới
+      map.setMaxBounds([[bb[0]-0.03,bb[1]-0.03],[bb[2]+0.03,bb[3]+0.03]]);
       map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:60,pitch:50,bearing:-17,duration:1200,maxZoom:14});
       map.__fitted=true;
     }
