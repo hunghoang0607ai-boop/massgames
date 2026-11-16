@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Xây Dựng Trên Bản Đồ — MassGames</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:#12141a;color:#e8e8e8;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+a{color:#8b93a7;text-decoration:none}
+a:hover{color:#f0c060}
+#map{position:fixed;inset:0}
+.panel{position:absolute;background:rgba(18,20,26,.88);border:1px solid #2a3144;border-radius:10px;padding:10px 14px;backdrop-filter:blur(4px);z-index:2}
+#hud{top:12px;left:12px;width:270px}
+#hud h2{margin:0 0 6px;font-size:16px;color:#f0c060}
+#hud .stat{display:flex;justify-content:space-between;font-size:13px;margin:3px 0}
+#hud .stat b{color:#fff}
+#hint{top:12px;left:50%;transform:translateX(-50%);max-width:70%;font-size:14px;color:#f0c060;text-align:center}
+#tools{bottom:12px;left:12px;width:300px}
+#tools .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.btn{background:#2a3144;color:#eee;border:1px solid #47506a;border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;cursor:pointer}
+.btn:hover:not(:disabled){background:#384262}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.on{background:#3b4a78;border-color:#7e93d0}
+#log{top:12px;right:12px;width:290px;font-size:12px;color:#cfd6e4}
+#log div{padding:3px 0;border-bottom:1px solid #222838}
+#log div:first-child{color:#fff}
+.attr{position:absolute;right:8px;bottom:6px;z-index:1}
+.small{font-size:12px;color:#8a92a6}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="panel" id="hud">
+  <h2>Xây Dựng Trên Bản Đồ</h2>
+  <div class="stat"><span>Tiền</span><b id="s-money">0</b></div>
+  <div class="stat"><span>Dân cư</span><b id="s-pop">0</b></div>
+  <div class="stat"><span>Cấp phát triển</span><b id="s-level">—</b></div>
+  <div class="stat"><span>Thu nhập / giờ</span><b id="s-income">0</b></div>
+  <div class="stat"><span>Giờ</span><b id="s-t">0</b></div>
+</div>
+
+<div class="panel" id="hint"></div>
+
+<div class="panel" id="tools">
+  <div class="small">Chọn công trình rồi nhấn vào ô trong vùng. Mỗi ô là 10 m × 10 m.</div>
+  <div class="row" id="types"></div>
+  <div class="row">
+    <button class="btn" id="btn-remove">Xoá công trình</button>
+    <button class="btn" id="btn-reset">Chọn lại vùng</button>
+  </div>
+</div>
+
+<div class="panel" id="log"></div>
+
+<script>
+(function(){
+  const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+  const SIDE = 100;             // cạnh vùng (m): 100 × 100 = 10.000 m²
+  const CELL = 10;              // cạnh mỗi ô xây (m)
+  const N = SIDE / CELL;        // 10 ô mỗi chiều
+  const HALF = SIDE / 2;
+  const M_LAT = 111320;         // mét trên 1 độ vĩ độ
+  const TYPES = {
+    house: { name:'Nhà ở',      cost:100, h:8, c:'#e0b97a', income:2, pop:5 },
+    farm:  { name:'Nông trại',  cost:120, h:3, c:'#7fbf5a', income:4, pop:0 },
+    shop:  { name:'Cửa hàng',   cost:150, h:6, c:'#5aa2d6', income:6, pop:0 }
+  };
+  const $ = id => document.getElementById(id);
+
+  let map = null, styleReady = false;
+  let P = null;                 // vùng đã chọn: {lng, lat, mLng}
+  let grid = [];                // grid[i][j] = loại công trình hoặc null
+  let money = 500, pop = 0, t = 0;
+  let selType = 'house', removeMode = false;
+  let timer = null;
+  let logs = [];
+
+  // ---------- Bản đồ ----------
+  map = new maplibregl.Map({
+    container:'map', style:STYLE, center:[105.8542,21.0285], zoom:17, pitch:55, bearing:-17,
+    minZoom:15, maxPitch:80, attributionControl:{compact:true}
+  });
+  map.on('style.load', ()=>{ styleReady=true; addLayers(); redraw(); });
+  map.on('click', e=>onMapClick(e.lngLat));
+
+  function addLayers(){
+    const style=map.getStyle();
+    const first=(style.layers.find(l=>l.type==='symbol')||{}).id;
+    map.addSource('plot',{type:'geojson',data:empty()});
+    map.addSource('grid',{type:'geojson',data:empty()});
+    map.addSource('bld',{type:'geojson',data:empty()});
+    map.addLayer({id:'plot-fill',type:'fill',source:'plot',paint:{'fill-color':'#4caf50','fill-opacity':0.35}},first);
+    map.addLayer({id:'grid-lines',type:'line',source:'grid',paint:{'line-color':'#ffffff','line-opacity':0.25,'line-width':1}},first);
+    map.addLayer({id:'bld',type:'fill-extrusion',source:'bld',paint:{
+      'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':0,'fill-extrusion-opacity':0.95}},first);
+    // Hàng rào quanh vùng: nét đứt dày màu gỗ
+    map.addLayer({id:'plot-fence',type:'line',source:'plot',paint:{'line-color':'#c8a064','line-width':5,'line-dasharray':[1.2,0.8]}},first);
+  }
+
+  function empty(){ return {type:'FeatureCollection',features:[]}; }
+
+  // Chuyển toạ độ (mét, gốc là tâm vùng) sang kinh/vĩ độ
+  function toLL(dx,dy){ return [P.lng + dx/P.mLng, P.lat + dy/M_LAT]; }
+  function square(x0,y0,x1,y1){ return [toLL(x0,y0),toLL(x1,y0),toLL(x1,y1),toLL(x0,y1),toLL(x0,y0)]; }
+
+  // ---------- Chọn vùng và xây ----------
+  function onMapClick(ll){
+    if(!P){
+      const mLng = M_LAT*Math.cos(ll.lat*Math.PI/180);
+      P = { lng:ll.lng, lat:ll.lat, mLng };
+      grid = Array.from({length:N},()=>Array(N).fill(null));
+      money = 500; pop = 0; t = 0; logs = [];
+      addLog('Đã chọn vùng 10.000 m² (100 × 100 m).');
+      addLog('Bắt đầu xây dựng. Thu nhập chạy theo thời gian.');
+      startTimer();
+      flyTo(ll);
+      redraw(); render();
+      return;
+    }
+    const cell = cellAt(ll);
+    if(!cell) return;
+    const [i,j] = cell;
+    if(removeMode){ removeAt(i,j); return; }
+    placeAt(i,j);
+  }
+
+  function cellAt(ll){
+    const dx = (ll.lng - P.lng)*P.mLng, dy = (ll.lat - P.lat)*M_LAT;
+    if(Math.abs(dx)>HALF || Math.abs(dy)>HALF) return null;
+    return [Math.floor((dx+HALF)/CELL), Math.floor((dy+HALF)/CELL)];
+  }
+
+  function placeAt(i,j){
+    if(grid[i][j]){ addLog('Ô này đã có công trình.'); return render(); }
+    const T = TYPES[selType];
+    if(money < T.cost){ addLog('Không đủ tiền để xây '+T.name+' ('+T.cost+').'); return render(); }
+    money -= T.cost;
+    grid[i][j] = selType;
+    addLog('Đã xây '+T.name+' (−'+T.cost+').');
+    redraw(); render();
+  }
+
+  function removeAt(i,j){
+    const type = grid[i][j];
+    if(!type){ addLog('Ô này trống.'); return render(); }
+    money += Math.floor(TYPES[type].cost/2);
+    grid[i][j] = null;
+    addLog('Đã xoá '+TYPES[type].name+' (hoàn 50%).');
+    redraw(); render();
+  }
+
+  function flyTo(ll){
+    map.flyTo({ center:[ll.lng,ll.lat], zoom:18, pitch:55, bearing:-17, duration:1200 });
+  }
+
+  // ---------- Vẽ ----------
+  function redraw(){
+    if(!styleReady) return;
+    if(!P){
+      map.getSource('plot').setData(empty());
+      map.getSource('grid').setData(empty());
+      map.getSource('bld').setData(empty());
+      return;
+    }
+    // Vùng tô màu + hàng rào
+    map.getSource('plot').setData({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[square(-HALF,-HALF,HALF,HALF)]}});
+    // Lưới ô
+    const lines=[];
+    for(let k=0;k<=N;k++){
+      const x=-HALF+k*CELL, y=-HALF+k*CELL;
+      lines.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[toLL(x,-HALF),toLL(x,HALF)]}});
+      lines.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[toLL(-HALF,y),toLL(HALF,y)]}});
+    }
+    map.getSource('grid').setData({type:'FeatureCollection',features:lines});
+    // Công trình
+    const blds=[];
+    for(let i=0;i<N;i++) for(let j=0;j<N;j++){
+      const type=grid[i][j]; if(!type) continue;
+      const x0=-HALF+i*CELL, y0=-HALF+j*CELL, T=TYPES[type];
+      blds.push({type:'Feature',properties:{h:T.h,c:T.c},geometry:{type:'Polygon',coordinates:[square(x0,y0,x0+CELL,y0+CELL)]}});
+    }
+    map.getSource('bld').setData({type:'FeatureCollection',features:blds});
+  }
+
+  // ---------- Tiến trình ----------
+  function startTimer(){ stopTimer(); timer=setInterval(tick,1000); }
+  function stopTimer(){ if(timer){ clearInterval(timer); timer=null; } }
+  function tick(){
+    if(!P) return;
+    t++;
+    let houses=0, income=0;
+    for(let i=0;i<N;i++) for(let j=0;j<N;j++){
+      const type=grid[i][j]; if(!type) continue;
+      if(type==='house') houses++;
+      income += TYPES[type].income;
+    }
+    money += income;
+    const target = houses*TYPES.house.pop;
+    pop += (target-pop)*0.05;
+    render();
+  }
+
+  function levelOf(p){
+    if(p>=60) return 'Thành phố nhỏ';
+    if(p>=30) return 'Thị trấn';
+    if(p>=10) return 'Làng';
+    if(p>=1)  return 'Trại dựng';
+    return '—';
+  }
+  function incomeNow(){
+    let s=0; for(let i=0;i<N;i++) for(let j=0;j<N;j++){ const ty=grid[i][j]; if(ty) s+=TYPES[ty].income; }
+    return s;
+  }
+
+  // ---------- Giao diện ----------
+  function addLog(text){ logs.unshift('Giờ '+t+': '+text); if(logs.length>30) logs.length=30; }
+
+  function render(){
+    $('s-money').textContent=Math.floor(money);
+    $('s-pop').textContent=Math.round(pop);
+    $('s-level').textContent=levelOf(Math.round(pop));
+    $('s-income').textContent=P?incomeNow():0;
+    $('s-t').textContent=t;
+    $('hint').textContent = !P
+      ? 'Nhấn lên bản đồ để chọn một vùng 10.000 m² để xây dựng.'
+      : (removeMode ? 'Nhấn vào công trình để xoá.' : 'Nhấn vào ô trong vùng để xây '+TYPES[selType].name+'.');
+    $('btn-remove').classList.toggle('on',removeMode);
+    $('btn-remove').disabled=!P;
+    $('btn-reset').disabled=!P;
+    document.querySelectorAll('#types .btn').forEach(b=>{
+      b.classList.toggle('on', b.dataset.id===selType && !removeMode);
+      b.disabled=!P;
+    });
+    const lg=$('log'); lg.textContent='';
+    logs.slice(0,8).forEach(x=>{ const d=document.createElement('div'); d.textContent=x; lg.appendChild(d); });
+  }
+
+  const typesBox=$('types');
+  Object.entries(TYPES).forEach(([id,T])=>{
+    const b=document.createElement('button');
+    b.className='btn'; b.dataset.id=id;
+    b.textContent=T.name+' ('+T.cost+')';
+    b.onclick=()=>{ selType=id; removeMode=false; render(); };
+    typesBox.appendChild(b);
+  });
+  $('btn-remove').onclick=()=>{ if(!P) return; removeMode=!removeMode; render(); };
+  $('btn-reset').onclick=()=>{
+    if(!P) return;
+    stopTimer(); P=null; grid=[]; money=500; pop=0; t=0; logs=[]; removeMode=false;
+    redraw(); render();
+  };
+  render();
+})();
+</script>
+</body>
+</html>
