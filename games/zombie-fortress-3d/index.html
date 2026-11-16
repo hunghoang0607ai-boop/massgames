@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pháo Đài Sống Sót 3D — MassGames</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#12141a;color:#e8e8e8;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px;user-select:none}
+.nav{width:100%;max-width:1280px;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.nav a{color:#8b93a7;font-size:14px;text-decoration:none}
+.nav a:hover{color:#f0c060}
+h1{font-size:20px;margin:4px 0 6px;color:#f0c060}
+#hud{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-bottom:8px;font-size:15px}
+#hud b{color:#fff}
+#wrap{position:relative;width:100%;max-width:1280px}
+#stage{width:100%;border-radius:10px;overflow:hidden;border:2px solid #2f3a28;background:#141a16}
+#stage canvas{display:block;width:100%;height:auto;cursor:crosshair}
+#bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0;max-width:1280px}
+button{background:#2a3144;color:#eee;border:1px solid #47506a;border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer}
+button:hover:not(:disabled){background:#384262}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.sel{outline:2px solid #f0c060}
+button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
+#info{min-height:44px;max-width:1280px;width:100%;background:#1a1d26;border-radius:8px;padding:8px 12px;font-size:14px;line-height:1.5}
+#msg{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);padding:6px 14px;border-radius:8px;font-size:15px;pointer-events:none;display:none;white-space:nowrap}
+#ftext{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.ftxt{position:absolute;font-weight:800;font-size:15px;text-shadow:0 1px 3px #000;transform:translate(-50%,-50%);white-space:nowrap}
+#over{position:absolute;inset:0;background:rgba(0,0,0,.78);display:none;flex-direction:column;align-items:center;justify-content:center;border-radius:10px;text-align:center;padding:20px}
+#over h2{color:#e25555;font-size:30px;margin:0 0 10px}
+#over p{margin:4px 0;font-size:16px}
+.hint{font-size:12px;color:#8a92a6;margin-top:6px;text-align:center}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+</head>
+<body>
+<div class="nav"><a href="../../">← Tất cả game</a><span></span></div>
+<h1>🧟 Pháo Đài Sống Sót 3D</h1>
+<div id="hud">
+  <span>💰 Vàng: <b id="h-gold">0</b></span>
+  <span>❤️ Căn cứ: <b id="h-hp">0</b></span>
+  <span>🌊 Đợt: <b id="h-wave">0</b></span>
+  <span>🧟 Còn lại: <b id="h-left">0</b></span>
+  <span>⚡ Thu nhập: <b id="h-inc">0</b>/s</span>
+  <span>☠️ Đã diệt: <b id="h-kills">0</b></span>
+</div>
+
+<div id="wrap">
+  <div id="stage"></div>
+  <div id="ftext"></div>
+  <div id="msg"></div>
+  <div id="over">
+    <h2>Căn cứ đã thất thủ!</h2>
+    <p>Bạn đã sống sót qua <b id="o-wave">0</b> đợt.</p>
+    <p>Kỷ lục: <b id="o-best">0</b> đợt</p>
+    <p style="margin-top:12px"><button class="go" id="restart">Chơi lại</button></p>
+  </div>
+</div>
+
+<div id="bar">
+  <button id="b-rifle">[1] Chốt bắn</button>
+  <button id="b-shotgun">[2] Súng săn</button>
+  <button id="b-flame">[3] Bình lửa</button>
+  <button id="b-wall">Gia cố tường</button>
+  <button id="b-gen">Máy phát điện</button>
+  <button id="b-repair">Sửa căn cứ</button>
+  <button id="b-up">[U] Nâng cấp tháp</button>
+  <button id="b-sell">[S] Bán tháp</button>
+  <button id="b-zoomout">🔍−</button>
+  <button id="b-zoomin">🔍+</button>
+  <button id="b-zoomreset">Zoom <span id="zoom-lbl">70%</span></button>
+  <button id="b-rotl">⟲ Q</button>
+  <button id="b-rotr">E ⟳</button>
+  <button class="go" id="b-start">[Space] Bắt đầu đợt</button>
+</div>
+
+<div id="info"></div>
+<div class="hint">Chọn tháp → click ô trống để đặt · Click tháp để chọn · Kéo để di chuyển · Lăn chuột để zoom · Q/E xoay · Esc hủy · Zombie tấn công từ 4 phía!</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ===== Dữ liệu (giống bản 2D) =====
+const W=1280,H=800,CELL=40;
+const BASE={x:640,y:400,r:56};
+const TT={
+  rifle:{name:'Chốt bắn',cost:50,range:140,dmg:14,rate:0.55,color:'#7fd3ff',desc:'Bắn nhanh vào một mục tiêu gần nhất.'},
+  shotgun:{name:'Súng săn',cost:85,range:95,dmg:9,rate:1.1,color:'#ffb347',desc:'Gây sát thương diện rộng cho mọi zombie trong tầm.'},
+  flame:{name:'Bình lửa',cost:70,range:85,dmg:6,rate:0.25,color:'#ff5a3c',desc:'Đốt liên tục và làm chậm zombie trong tầm.'}
+};
+const ZT={
+  walker:{hp:28,speed:26,dmg:5,r:11,color:'#6fae5b',gold:6},
+  runner:{hp:16,speed:60,dmg:4,r:9,color:'#b2d86a',gold:5},
+  tank:{hp:120,speed:15,dmg:12,r:16,color:'#4f7d4a',gold:14},
+  boss:{hp:520,speed:13,dmg:30,r:26,color:'#9b2d2d',gold:60,boss:true}
+};
+
+let S, best=0;
+try{ best=+(localStorage.getItem('pdst3d_best')||0); }catch(e){}
+
+function newState(){
+  return {gold:120,baseHp:100,baseMax:100,wall:0,gen:0,waveNo:0,active:false,queue:[],spawnCD:0,
+    kills:0,towers:[],zombies:[],fx:[],sel:null,pick:null,hover:null,over:false,msg:'',msgT:0,t:0,lastInfo:''};
+}
+const $=id=>document.getElementById(id);
+function say(m){ S.msg=m; S.msgT=2.5; }
+function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+
+// ===== Logic mô phỏng (giữ nguyên luật chơi) =====
+function tstats(t){
+  const T=TT[t.type], L=t.lvl-1;
+  return {dmg:T.dmg*(1+0.35*L), range:T.range*(1+0.08*L), cool:T.rate*(1-0.07*L)};
+}
+function tMaxHp(lvl){ return 80+30*(lvl-1); }
+function upCost(t){ return Math.round(TT[t.type].cost*0.8*t.lvl); }
+function refund(t){ return Math.round(t.spent*0.6); }
+function newTower(type,c,r){
+  const T=TT[type];
+  return {type,c,r,x:c*CELL+CELL/2,y:r*CELL+CELL/2,lvl:1,cd:0,hp:tMaxHp(1),maxHp:tMaxHp(1),spent:T.cost,angle:-Math.PI/2,hit:0};
+}
+function validCell(c,r){
+  if(c<0||r<0||c>=W/CELL||r>=H/CELL) return false;
+  const x=c*CELL+CELL/2,y=r*CELL+CELL/2;
+  if(Math.hypot(x-BASE.x,y-BASE.y)<BASE.r+CELL*0.6) return false;
+  return !S.towers.some(t=>t.c===c&&t.r===r);
+}
+function buildQueue(w){
+  const n=6+w*3, q=[];
+  for(let i=0;i<n;i++){
+    const r=Math.random();
+    let type='walker';
+    if(w>=2 && r<Math.min(0.5,0.1+0.03*w)) type='runner';
+    else if(w>=3 && r>1-Math.min(0.3,0.05*w)) type='tank';
+    q.push(type);
+  }
+  if(w%5===0) q.splice(Math.floor(q.length/2),0,'boss');
+  return q;
+}
+function spawnZombie(type){
+  const T=ZT[type], side=Math.floor(Math.random()*4);
+  let x,y;
+  if(side===0){x=Math.random()*W;y=-20;}
+  else if(side===1){x=Math.random()*W;y=H+20;}
+  else if(side===2){x=-20;y=Math.random()*H;}
+  else {x=W+20;y=Math.random()*H;}
+  const k=1+0.14*(S.waveNo-1);
+  S.zombies.push({x,y,hp:T.hp*k,maxHp:T.hp*k,speed:T.speed*(1+0.02*(S.waveNo-1)),dmg:T.dmg,r:T.r,
+    color:T.color,gold:T.gold,boss:!!T.boss,slowT:0,hitT:0,dead:false,ph:Math.random()*6,
+    ang:Math.atan2(BASE.y-y,BASE.x-x)});
+}
+function startWave(){
+  if(S.active||S.over) return;
+  S.waveNo++; S.active=true;
+  S.queue=buildQueue(S.waveNo); S.spawnCD=1.0;
+  say(S.waveNo%5===0 ? '⚠ Đợt '+S.waveNo+': BOSS xuất hiện!' : 'Đợt '+S.waveNo+' bắt đầu!');
+}
+function burst(x,y,c,n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*6.28, s=40+Math.random()*120;
+    S.fx.push({k:'p',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0.4+Math.random()*0.3,c});
+  }
+}
+function floatText(x,y,txt,c){ S.fx.push({k:'t',x,y,txt,c,t:0.9}); }
+function hurt(z,amt){
+  if(z.dead) return;
+  z.hp-=amt; z.hitT=0.08;
+  if(z.hp<=0){
+    z.dead=true; S.gold+=z.gold; S.kills++;
+    burst(z.x,z.y,'#7a1f1f',14);
+    floatText(z.x,z.y-z.r,'+'+z.gold,'#f0c060');
+  }
+}
+function fire(t){
+  const T=TT[t.type], s=tstats(t);
+  const inRange=S.zombies.filter(z=>!z.dead && Math.hypot(z.x-t.x,z.y-t.y)<=s.range);
+  if(!inRange.length) return;
+  if(t.type==='rifle'){
+    const best=inRange.reduce((a,b)=>dist(a,t)<dist(b,t)?a:b);
+    hurt(best,s.dmg);
+    t.angle=Math.atan2(best.y-t.y,best.x-t.x);
+    S.fx.push({k:'line',x1:t.x,y1:t.y,x2:best.x,y2:best.y,t:0.12,c:T.color});
+  } else if(t.type==='shotgun'){
+    inRange.forEach(z=>hurt(z,s.dmg));
+    S.fx.push({k:'ring',x:t.x,y:t.y,r:s.range,t:0.2,c:T.color,fill:false});
+  } else {
+    inRange.forEach(z=>{hurt(z,s.dmg); z.slowT=0.7;});
+    S.fx.push({k:'ring',x:t.x,y:t.y,r:s.range,t:0.15,c:'#ff8a3c',fill:true});
+  }
+  t.cd=s.cool;
+}
+function update(dt){
+  S.t+=dt;
+  S.gold+=S.gen*3*dt;
+  if(S.queue.length){
+    S.spawnCD-=dt;
+    if(S.spawnCD<=0){
+      spawnZombie(S.queue.shift());
+      S.spawnCD=Math.max(0.3,1.0-S.waveNo*0.04)*(0.6+Math.random()*0.8);
+    }
+  }
+  for(const z of S.zombies){
+    if(z.dead) continue;
+    z.ph+=dt*6; z.hitT=Math.max(0,z.hitT-dt); z.slowT=Math.max(0,z.slowT-dt);
+    let blocker=null;
+    for(const t of S.towers){
+      if(Math.hypot(t.x-z.x,t.y-z.y)<CELL/2+z.r-2){ blocker=t; break; }
+    }
+    if(blocker){
+      blocker.hp-=z.dmg*1.3*dt; blocker.hit=0.1;
+    } else {
+      const dx=BASE.x-z.x, dy=BASE.y-z.y, d=Math.hypot(dx,dy)||1;
+      const sp=z.speed*(z.slowT>0?0.5:1);
+      z.x+=dx/d*sp*dt; z.y+=dy/d*sp*dt; z.ang=Math.atan2(dy,dx);
+    }
+    if(Math.hypot(BASE.x-z.x,BASE.y-z.y)<BASE.r+z.r*0.4){
+      z.dead=true; S.baseHp-=z.dmg;
+      floatText(BASE.x,BASE.y-BASE.r-6,'-'+z.dmg,'#ff6b6b');
+      burst(z.x,z.y,z.color,10);
+    }
+  }
+  for(const t of S.towers){
+    t.cd-=dt; t.hit=Math.max(0,t.hit-dt);
+    if(t.cd<=0) fire(t);
+  }
+  S.zombies=S.zombies.filter(z=>!z.dead);
+  S.towers=S.towers.filter(t=>{
+    if(t.hp>0) return true;
+    burst(t.x,t.y,'#886644',12);
+    if(S.sel===t) S.sel=null;
+    return false;
+  });
+  S.fx.forEach(f=>{
+    f.t-=dt;
+    if(f.k==='p'){ f.x+=f.vx*dt; f.y+=f.vy*dt; f.vx*=0.9; f.vy*=0.9; }
+    if(f.k==='t'){ f.y-=30*dt; }
+  });
+  S.fx=S.fx.filter(f=>f.t>0);
+  if(S.active && S.queue.length===0 && S.zombies.length===0){
+    S.active=false;
+    const reward=40+S.waveNo*10;
+    S.gold+=reward;
+    S.towers.forEach(t=>t.hp=t.maxHp);
+    say('Đợt '+S.waveNo+' thành công! +'+reward+' vàng, tháp đã được sửa.');
+  }
+  if(S.baseHp<=0 && !S.over){
+    S.baseHp=0; S.over=true;
+    if(S.waveNo>best){ best=S.waveNo; try{localStorage.setItem('pdst3d_best',best);}catch(e){} }
+    $('over').style.display='flex';
+    $('o-wave').textContent=S.waveNo;
+    $('o-best').textContent=best;
+  }
+  if(S.msgT>0){ S.msgT-=dt; if(S.msgT<=0){ S.msg=''; } }
+}
+function buyWall(){
+  const c=90*(S.wall+1);
+  if(S.gold<c||S.wall>=5) return;
+  S.gold-=c; S.wall++; S.baseMax+=40; S.baseHp+=40;
+  say('Tường căn cứ được gia cố (+40 HP tối đa)');
+}
+function buyGen(){
+  const c=100*(S.gen+1);
+  if(S.gold<c||S.gen>=6) return;
+  S.gold-=c; S.gen++;
+  say('Máy phát điện Lv'+S.gen+': +'+(S.gen*3)+' vàng/giây');
+}
+function repairBase(){
+  const c=30+S.waveNo*5;
+  if(S.gold<c||S.baseHp>=S.baseMax) return;
+  S.gold-=c; S.baseHp=S.baseMax; say('Căn cứ đã được sửa chữa');
+}
+function pickTower(k){ if(S.over) return; S.pick=S.pick===k?null:k; S.sel=null; }
+function upgrade(t){
+  if(!t||t.lvl>=5||S.over) return;
+  const cost=upCost(t);
+  if(S.gold<cost){ say('Không đủ vàng để nâng cấp'); return; }
+  S.gold-=cost; t.spent+=cost; t.lvl++;
+  const nm=tMaxHp(t.lvl); t.hp+=nm-t.maxHp; t.maxHp=nm;
+  burst(t.x,t.y,'#f0c060',10);
+  say(TT[t.type].name+' lên cấp '+t.lvl);
+}
+function sell(t){
+  if(!t||S.over) return;
+  S.gold+=refund(t); S.towers=S.towers.filter(x=>x!==t); S.sel=null;
+}
+
+// ===== Camera (góc nhìn 3D cố định, có zoom/xoay/kéo) =====
+const cam={tx:BASE.x,ty:BASE.y,yaw:0,z:0.7};
+const ZMIN=0.5, ZMAX=2.5;
+function clampCam(){ cam.tx=Math.min(W,Math.max(0,cam.tx)); cam.ty=Math.min(H,Math.max(0,cam.ty)); }
+function setZoom(nz){
+  cam.z=Math.min(ZMAX,Math.max(ZMIN,nz));
+  const el=$('zoom-lbl'); if(el) el.textContent=Math.round(cam.z*100)+'%';
+}
+function zoomBy(f){ setZoom(cam.z*f); }
+function panBy(dxPx,dyPx){
+  const k=0.65/cam.z, c=Math.cos(cam.yaw), s=Math.sin(cam.yaw);
+  cam.tx-=c*dxPx*k; cam.ty+=s*dxPx*k;
+  cam.tx-=s*dyPx*k*1.4; cam.ty-=c*dyPx*k*1.4;
+  clampCam();
+}
+function updateCamera(){
+  const k=1/cam.z, hd=420*k, hy=620*k;
+  camera.position.set(cam.tx+Math.sin(cam.yaw)*hd, hy, cam.ty+Math.cos(cam.yaw)*hd);
+  camera.lookAt(cam.tx,0,cam.ty);
+}
+
+// ===== Three.js: dựng cảnh =====
+const stage=$('stage');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+renderer.domElement.style.width='100%';
+renderer.domElement.style.height='auto';
+stage.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x141a16);
+scene.fog=new THREE.Fog(0x141a16,1400,2600);
+const camera=new THREE.PerspectiveCamera(38,W/H,10,4000);
+function resize(){
+  const w=stage.clientWidth||W;
+  renderer.setSize(w,w*H/W,false);
+  camera.aspect=W/H; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',resize); resize();
+
+scene.add(new THREE.HemisphereLight(0x9fb8d0,0x3a3020,0.9));
+const sun=new THREE.DirectionalLight(0xffe2b8,1.1);
+sun.position.set(-500,800,300);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-900,right:900,top:900,bottom:-900,near:10,far:2600});
+sun.shadow.camera.updateProjectionMatrix();
+sun.target.position.set(W/2,0,H/2);
+scene.add(sun,sun.target);
+const fireLight=new THREE.PointLight(0xff9040,1.4,220,1.6);
+fireLight.position.set(BASE.x,14,BASE.y);
+scene.add(fireLight);
+
+// Mặt đất có texture cỏ
+function makeGroundTexture(){
+  const c=document.createElement('canvas'); c.width=c.height=512;
+  const g=c.getContext('2d');
+  g.fillStyle='#2a3a22'; g.fillRect(0,0,512,512);
+  for(let i=0;i<900;i++){
+    const x=Math.random()*512,y=Math.random()*512,r=2+Math.random()*10;
+    g.fillStyle=Math.random()<0.5?'rgba(60,90,50,0.35)':'rgba(20,30,18,0.3)';
+    g.beginPath(); g.arc(x,y,r,0,6.283); g.fill();
+  }
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(6,4);
+  t.colorSpace=THREE.SRGBColorSpace;
+  return t;
+}
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(W+600,H+600),new THREE.MeshStandardMaterial({map:makeGroundTexture(),roughness:1}));
+ground.rotation.x=-Math.PI/2; ground.position.set(W/2,0,H/2); ground.receiveShadow=true;
+scene.add(ground);
+
+// Cây bụi và đá trang trí ngoài khu vực chiến đấu
+const bushGeo=new THREE.SphereGeometry(6,8,6), rockGeo=new THREE.DodecahedronGeometry(4,0);
+const bushMat=new THREE.MeshStandardMaterial({color:0x3d6b32,roughness:1});
+const rockMat=new THREE.MeshStandardMaterial({color:0x6a6a70,roughness:0.95});
+for(let i=0;i<90;i++){
+  const x=Math.random()*W, z=Math.random()*H;
+  if(Math.hypot(x-BASE.x,z-BASE.y)<170) continue;
+  const isRock=i%3===0;
+  const m=new THREE.Mesh(isRock?rockGeo:bushGeo, isRock?rockMat:bushMat);
+  m.position.set(x, isRock?2:4, z);
+  m.scale.set(1+Math.random()*0.8, isRock?0.8:0.7+Math.random()*0.4, 1+Math.random()*0.8);
+  m.castShadow=m.receiveShadow=true;
+  scene.add(m);
+}
+
+// Đường đất từ tâm tới các nhà
+const HOUSE_ANG=[Math.PI/4,3*Math.PI/4,5*Math.PI/4,7*Math.PI/4];
+const pathMat=new THREE.MeshStandardMaterial({color:0x6b5636,roughness:1});
+HOUSE_ANG.forEach(a=>{
+  const dx=Math.cos(a), dz=Math.sin(a), len=30;
+  const p=new THREE.Mesh(new THREE.BoxGeometry(len,0.4,7),pathMat);
+  p.position.set(BASE.x+dx*len/2, 0.2, BASE.y+dz*len/2);
+  p.rotation.y=-Math.atan2(dz,dx);
+  p.receiveShadow=true;
+  scene.add(p);
+});
+
+// Các vật liệu dùng chung
+const MAT={
+  stone:new THREE.MeshStandardMaterial({color:0x6b6e76,roughness:0.85}),
+  wood:new THREE.MeshStandardMaterial({color:0x6b4a2f,roughness:0.9}),
+  brick:new THREE.MeshStandardMaterial({color:0x7a4a3a,roughness:0.9}),
+  glass:new THREE.MeshStandardMaterial({color:0xffd77a,emissive:0xffa030,emissiveIntensity:0.9}),
+  door:new THREE.MeshStandardMaterial({color:0x3b2616,roughness:0.9}),
+  foundation:new THREE.MeshStandardMaterial({color:0x6f6a62,roughness:1}),
+  flame:new THREE.MeshStandardMaterial({color:0xff7a2a,emissive:0xff5a10,emissiveIntensity:1.6,transparent:true,opacity:0.9}),
+  leaf:new THREE.MeshStandardMaterial({color:0x4f7a3a,roughness:1}),
+  lantern:new THREE.MeshStandardMaterial({color:0xffd27a,emissive:0xffb040,emissiveIntensity:1.2})
+};
+const roofMats=['#9b3b2b','#3b5f8a','#6b4a2f','#4f7a3a'].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:0.85}));
+const wallColMats=['#c9a878','#b8c4cc','#d7c18e','#c9b48a'].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:0.9}));
+
+// Tường căn cứ (gỗ hoặc đá theo cấp gia cố)
+let wallGroup=null, wallStone=null;
+const stakeGeo=new THREE.ConeGeometry(2.6,7,6);
+const merlonGeo=new THREE.BoxGeometry(6,5,4);
+function buildWall(stone){
+  if(wallGroup) scene.remove(wallGroup);
+  wallStone=stone;
+  wallGroup=new THREE.Group(); scene.add(wallGroup);
+  const hh=stone?15:10;
+  const sideMat=new THREE.MeshStandardMaterial({color:stone?0x8e9099:0x8a6642,roughness:0.9,side:THREE.DoubleSide});
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(BASE.r+3,BASE.r+3,hh,56,1,true),sideMat);
+  body.position.set(BASE.x,hh/2,BASE.y); body.castShadow=body.receiveShadow=true;
+  wallGroup.add(body);
+  const top=new THREE.Mesh(new THREE.RingGeometry(BASE.r-4,BASE.r+3,56),
+    new THREE.MeshStandardMaterial({color:stone?0xc4c6cc:0xb08656,side:THREE.DoubleSide}));
+  top.rotation.x=-Math.PI/2; top.position.set(BASE.x,hh,BASE.y);
+  wallGroup.add(top);
+  const topMat=new THREE.MeshStandardMaterial({color:0xc4c6cc,roughness:0.8});
+  const stakeMat=new THREE.MeshStandardMaterial({color:0xd2a46a,roughness:0.9});
+  const n=24;
+  for(let i=0;i<n;i++){
+    const a=i/n*Math.PI*2;
+    const px=BASE.x+Math.cos(a)*(BASE.r+1), pz=BASE.y+Math.sin(a)*(BASE.r+1);
+    if(stone){
+      if(i%2) continue;
+      const m=new THREE.Mesh(merlonGeo,topMat);
+      m.position.set(px,hh+2.5,pz); m.rotation.y=-a; m.castShadow=true;
+      wallGroup.add(m);
+    } else {
+      const s=new THREE.Mesh(stakeGeo,stakeMat);
+      s.position.set(px,hh+3.5,pz); s.castShadow=true;
+      wallGroup.add(s);
+    }
+  }
+}
+
+// Nhà 2.5D trong 3D: khối + mái chóp + cửa sổ phát sáng
+function buildHouse(a,i){
+  const g=new THREE.Group();
+  const s=12, w=s*1.1, d=s*0.95, h=s*0.9;
+  const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),wallColMats[i]);
+  body.position.y=h/2; body.castShadow=body.receiveShadow=true; g.add(body);
+  const fnd=new THREE.Mesh(new THREE.BoxGeometry(w+0.6,2,d+0.6),MAT.foundation);
+  fnd.position.y=1; fnd.receiveShadow=true; g.add(fnd);
+  const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.hypot(w,d)/2*1.05,s*0.6,4),roofMats[i]);
+  roof.rotation.y=Math.PI/4; roof.position.y=h+s*0.3; roof.castShadow=true; g.add(roof);
+  const chim=new THREE.Mesh(new THREE.BoxGeometry(s*0.22,s*0.6,s*0.22),MAT.brick);
+  chim.position.set(w*0.3,h+s*0.6,-d*0.2); chim.castShadow=true; g.add(chim);
+  [-w*0.25,w*0.25].forEach(x=>{
+    const win=new THREE.Mesh(new THREE.BoxGeometry(s*0.2,s*0.2,0.6),MAT.glass);
+    win.position.set(x,h*0.55,d/2+0.2); g.add(win);
+  });
+  const door=new THREE.Mesh(new THREE.BoxGeometry(s*0.26,s*0.45,0.6),MAT.door);
+  door.position.set(0,s*0.23,d/2+0.2); g.add(door);
+  g.position.set(BASE.x+Math.cos(a)*30,0,BASE.y+Math.sin(a)*30);
+  // mặt tiền hướng về tâm
+  g.rotation.y=Math.atan2(-Math.cos(a),-Math.sin(a));
+  scene.add(g);
+}
+HOUSE_ANG.forEach((a,i)=>buildHouse(a,i));
+
+// Lửa trại ở giữa
+const flameMesh=new THREE.Mesh(new THREE.ConeGeometry(7,18,8),MAT.flame);
+flameMesh.position.set(BASE.x,9,BASE.y); scene.add(flameMesh);
+for(let i=0;i<10;i++){
+  const a=i/10*Math.PI*2;
+  const st=new THREE.Mesh(new THREE.BoxGeometry(4,3,4),MAT.foundation);
+  st.position.set(BASE.x+Math.cos(a)*13,1.5,BASE.y+Math.sin(a)*13); st.castShadow=true; scene.add(st);
+}
+// Đèn lồng trên tường
+const lanternGeo=new THREE.SphereGeometry(1.8,8,6);
+for(let i=0;i<8;i++){
+  const a=i/8*Math.PI*2+0.2;
+  const lm=new THREE.Mesh(lanternGeo,MAT.lantern);
+  lm.position.set(BASE.x+Math.cos(a)*(BASE.r+4),11,BASE.y+Math.sin(a)*(BASE.r+4));
+  scene.add(lm);
+}
+// Ruộng rau và thùng nước
+const soil=new THREE.Mesh(new THREE.BoxGeometry(24,1.2,12),new THREE.MeshStandardMaterial({color:0x4a3520}));
+soil.position.set(BASE.x-19,0.6,BASE.y+24); soil.receiveShadow=true; scene.add(soil);
+const plantGeo=new THREE.ConeGeometry(1.5,3,6);
+for(let r=0;r<3;r++) for(let c=0;c<5;c++){
+  const p=new THREE.Mesh(plantGeo,MAT.leaf);
+  p.position.set(BASE.x-19-10+c*5,2.5,BASE.y+24-4+r*4); p.castShadow=true; scene.add(p);
+}
+const barrel=new THREE.Mesh(new THREE.CylinderGeometry(3.5,3.5,8,12),MAT.wood);
+barrel.position.set(BASE.x+30,4,BASE.y+30); barrel.castShadow=true; scene.add(barrel);
+
+// ===== Tháp =====
+function makeBar(w,y){
+  const bg=new THREE.Sprite(new THREE.SpriteMaterial({color:0x000000,transparent:true,opacity:0.6,depthTest:false}));
+  const fg=new THREE.Sprite(new THREE.SpriteMaterial({color:0x6fdc6f,depthTest:false}));
+  bg.scale.set(w,w*0.14,1); fg.scale.set(w,w*0.1,1);
+  bg.position.y=y; fg.position.y=y; bg.renderOrder=fg.renderOrder=10;
+  const grp=new THREE.Group(); grp.add(bg,fg);
+  return {grp,
+    setRatio(r){
+      fg.scale.x=Math.max(0.001,w*r);
+      fg.position.x=-(w-w*r)/2;
+      fg.material.color.setHex(r>0.5?0x6fdc6f:r>0.25?0xf0c060:0xe25555);
+      grp.visible=r<1;
+    }};
+}
+function makeTowerMesh(t){
+  const T=TT[t.type];
+  const g=new THREE.Group();
+  const accent=new THREE.MeshStandardMaterial({color:T.color,emissive:T.color,emissiveIntensity:0.25,roughness:0.5});
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(16,18,7,20),MAT.stone);
+  base.position.y=3.5; base.castShadow=base.receiveShadow=true; g.add(base);
+  if(t.type==='rifle'){
+    const body=new THREE.Mesh(new THREE.BoxGeometry(10,12,10),MAT.wood);
+    body.position.y=13; body.castShadow=true; g.add(body);
+    const barrelM=new THREE.Mesh(new THREE.BoxGeometry(4,4,26),accent);
+    barrelM.position.set(0,14,15); barrelM.castShadow=true; g.add(barrelM);
+  } else if(t.type==='shotgun'){
+    const body=new THREE.Mesh(new THREE.BoxGeometry(16,10,14),MAT.wood);
+    body.position.y=12; body.castShadow=true; g.add(body);
+    [-3,3].forEach(x=>{
+      const b=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.2,22,8),accent);
+      b.rotation.x=Math.PI/2; b.position.set(x,14,14); b.castShadow=true; g.add(b);
+    });
+  } else {
+    const tank=new THREE.Mesh(new THREE.CylinderGeometry(7,7,20,12),MAT.wood);
+    tank.position.set(0,15,-2); tank.castShadow=true; g.add(tank);
+    const nozzle=new THREE.Mesh(new THREE.CylinderGeometry(2,4,14,8),accent);
+    nozzle.rotation.x=Math.PI/2; nozzle.position.set(0,12,12); nozzle.castShadow=true; g.add(nozzle);
+  }
+  const bar=makeBar(20,22);
+  g.add(bar.grp);
+  g.userData.bar=bar;
+  g.userData.lvlShown=0;
+  g.userData.stars=new THREE.Group();
+  g.add(g.userData.stars);
+  g.position.set(t.x,0,t.y);
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+  return g;
+}
+function refreshStars(g,lvl){
+  g.userData.stars.clear();
+  for(let i=1;i<lvl;i++){
+    const st=new THREE.Mesh(new THREE.SphereGeometry(1.6,8,6),new THREE.MeshStandardMaterial({color:0xf0c060,emissive:0xf0c060,emissiveIntensity:0.8}));
+    st.position.set((i-1)*4-(lvl-2)*2,30,0); g.userData.stars.add(st);
+  }
+  g.userData.lvlShown=lvl;
+}
+const towerVis=new Map();
+function faceAng(ang){ return Math.atan2(Math.cos(ang),Math.sin(ang)); }
+function disposeGroup(g){
+  g.traverse(o=>{ if(o.material&&o.material.dispose) o.material.dispose(); });
+}
+function syncTowers(){
+  const live=new Set(S.towers);
+  for(const [t,g] of towerVis){ if(!live.has(t)){ scene.remove(g); disposeGroup(g); towerVis.delete(t); } }
+  for(const t of S.towers){
+    let g=towerVis.get(t);
+    if(!g){ g=makeTowerMesh(t); towerVis.set(t,g); scene.add(g); }
+    if(g.userData.lvlShown!==t.lvl) refreshStars(g,t.lvl);
+    g.rotation.y=faceAng(t.angle);
+    g.position.set(t.x, t.hit>0?Math.sin(S.t*80)*0.8:0, t.y);
+    g.userData.bar.setRatio(Math.max(0,t.hp/t.maxHp));
+  }
+}
+
+// ===== Zombie =====
+const zBodyGeo=new THREE.CylinderGeometry(0.7,0.8,2,8);
+const zHeadGeo=new THREE.SphereGeometry(0.6,10,8);
+const zArmGeo=new THREE.BoxGeometry(0.5,0.5,1.6);
+const zLegGeo=new THREE.BoxGeometry(0.5,1.6,0.5);
+const zEyeGeo=new THREE.SphereGeometry(0.12,6,4);
+const eyeMat=new THREE.MeshStandardMaterial({color:0xff2020,emissive:0xff2020,emissiveIntensity:1.5});
+const skinMat=new THREE.MeshStandardMaterial({color:0x9fbf7a,roughness:0.9});
+function makeZombieMesh(z){
+  const g=new THREE.Group();
+  const mat=new THREE.MeshStandardMaterial({color:z.color,roughness:0.9});
+  const body=new THREE.Mesh(zBodyGeo,mat); body.position.y=2.6; body.castShadow=true; g.add(body);
+  const head=new THREE.Mesh(zHeadGeo,skinMat); head.position.y=4.1; head.castShadow=true; g.add(head);
+  [-0.22,0.22].forEach(x=>{ const e=new THREE.Mesh(zEyeGeo,eyeMat); e.position.set(x,4.2,0.5); g.add(e); });
+  const armL=new THREE.Mesh(zArmGeo,mat); armL.position.set(-0.9,2.9,0.6); armL.castShadow=true; g.add(armL);
+  const armR=new THREE.Mesh(zArmGeo,mat); armR.position.set(0.9,2.9,0.6); armR.castShadow=true; g.add(armR);
+  const legL=new THREE.Group(); legL.position.set(-0.35,1.6,0);
+  const legLM=new THREE.Mesh(zLegGeo,mat); legLM.position.y=-0.8; legLM.castShadow=true; legL.add(legLM); g.add(legL);
+  const legR=new THREE.Group(); legR.position.set(0.35,1.6,0);
+  const legRM=new THREE.Mesh(zLegGeo,mat); legRM.position.y=-0.8; legRM.castShadow=true; legR.add(legRM); g.add(legR);
+  const k=z.r/10*1.2;
+  g.scale.setScalar(k);
+  const bar=makeBar(3.2,5.6);
+  g.add(bar.grp);
+  g.userData={mat,legL,legR,bar,k};
+  return g;
+}
+const zombieVis=new Map();
+function syncZombies(){
+  const live=new Set(S.zombies);
+  for(const [z,g] of zombieVis){
+    if(!live.has(z)){ scene.remove(g); disposeGroup(g); zombieVis.delete(z); }
+  }
+  for(const z of S.zombies){
+    let g=zombieVis.get(z);
+    if(!g){ g=makeZombieMesh(z); zombieVis.set(z,g); scene.add(g); }
+    const u=g.userData;
+    g.position.set(z.x, Math.abs(Math.sin(z.ph))*0.5, z.y);
+    g.rotation.y=faceAng(z.ang);
+    u.legL.rotation.x=Math.sin(z.ph)*0.6;
+    u.legR.rotation.x=-Math.sin(z.ph)*0.6;
+    u.mat.emissive.setHex(z.hitT>0?0x551010:0x000000);
+    u.bar.setRatio(Math.max(0,z.hp/z.maxHp));
+  }
+}
+
+// ===== Hiệu ứng (đường bắn, vòng sóng, hạt, chữ nổi) =====
+const RING_GEO=new THREE.RingGeometry(0.9,1,40);
+const PART_GEO=new THREE.BoxGeometry(1.8,1.8,1.8);
+const fxVis=new Map();
+const ftext=$('ftext');
+function createFxVis(f){
+  if(f.k==='line'){
+    const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(f.x1,12,f.y1),new THREE.Vector3(f.x2,8,f.y2)]);
+    const mat=new THREE.LineBasicMaterial({color:f.c,transparent:true});
+    const obj=new THREE.Line(geo,mat); scene.add(obj);
+    return {obj,t0:f.t,dispose(){geo.dispose(); mat.dispose();}};
+  }
+  if(f.k==='ring'){
+    const mat=new THREE.MeshBasicMaterial({color:f.c,transparent:true,side:THREE.DoubleSide,depthWrite:false});
+    const obj=new THREE.Mesh(RING_GEO,mat); obj.rotation.x=-Math.PI/2; obj.position.set(f.x,1.2,f.y); scene.add(obj);
+    return {obj,t0:f.t,dispose(){mat.dispose();}};
+  }
+  if(f.k==='p'){
+    const mat=new THREE.MeshBasicMaterial({color:f.c,transparent:true});
+    const obj=new THREE.Mesh(PART_GEO,mat); scene.add(obj);
+    return {obj,t0:f.t,dispose(){mat.dispose();}};
+  }
+  if(f.k==='t'){
+    const el=document.createElement('div');
+    el.className='ftxt'; el.textContent=f.txt; el.style.color=f.c;
+    ftext.appendChild(el);
+    return {el,t0:f.t,dispose(){ el.remove(); }};
+  }
+  return {t0:f.t,dispose(){}};
+}
+function updateFxVis(f,v){
+  const p=Math.max(0,f.t/v.t0);
+  if(f.k==='line'){ v.obj.material.opacity=p; }
+  else if(f.k==='ring'){
+    const s=f.r*(0.3+0.7*(1-p));
+    v.obj.scale.set(s,s,1); v.obj.material.opacity=p*0.8;
+  }
+  else if(f.k==='p'){
+    v.obj.position.set(f.x,4+(1-p)*-2,f.y); v.obj.material.opacity=p;
+    v.obj.rotation.set(f.t*6,f.t*4,0);
+  }
+  else if(f.k==='t'){
+    const pr=new THREE.Vector3(f.x,14,f.y).project(camera);
+    const sr=renderer.domElement.getBoundingClientRect();
+    v.el.style.left=((pr.x*0.5+0.5)*sr.width)+'px';
+    v.el.style.top=((-pr.y*0.5+0.5)*sr.height)+'px';
+    v.el.style.opacity=p;
+  }
+}
+function syncFx(){
+  const live=new Set(S.fx);
+  for(const [f,v] of fxVis){ if(!live.has(f)){ if(v.obj) scene.remove(v.obj); v.dispose(); fxVis.delete(f); } }
+  for(const f of S.fx){
+    let v=fxVis.get(f);
+    if(!v){ v=createFxVis(f); fxVis.set(f,v); }
+    updateFxVis(f,v);
+  }
+}
+
+// ===== Vòng cursor: ô đặt + tầm bắn =====
+const hoverMesh=new THREE.Mesh(new THREE.PlaneGeometry(CELL,CELL),new THREE.MeshBasicMaterial({color:0x5adc6e,transparent:true,opacity:0.4,depthWrite:false}));
+hoverMesh.rotation.x=-Math.PI/2; hoverMesh.position.y=0.5; hoverMesh.visible=false; scene.add(hoverMesh);
+const RANGE_GEO=new THREE.RingGeometry(0.97,1,96);
+const rangeRing=new THREE.Mesh(RANGE_GEO,new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.55,depthWrite:false}));
+rangeRing.rotation.x=-Math.PI/2; rangeRing.position.y=0.8; rangeRing.visible=false; scene.add(rangeRing);
+const selRing=new THREE.Mesh(RANGE_GEO,new THREE.MeshBasicMaterial({color:0xf0c060,transparent:true,opacity:0.8,depthWrite:false}));
+selRing.rotation.x=-Math.PI/2; selRing.position.y=0.9; selRing.visible=false; scene.add(selRing);
+
+function updateMarkers(){
+  if(S.pick && S.hover){
+    const c=S.hover.c, r=S.hover.r, ok=validCell(c,r), T=TT[S.pick];
+    const x=c*CELL+CELL/2, z=r*CELL+CELL/2;
+    hoverMesh.visible=true; hoverMesh.position.x=c*CELL+CELL/2; hoverMesh.position.z=r*CELL+CELL/2;
+    hoverMesh.material.color.setHex(ok?0x5adc6e:0xe25555);
+    rangeRing.visible=true; rangeRing.position.set(x,0.8,z); rangeRing.scale.set(T.range,T.range,1);
+  } else { hoverMesh.visible=false; rangeRing.visible=false; }
+  const sel=S.sel && S.towers.includes(S.sel)?S.sel:null;
+  if(sel){
+    const s=tstats(sel);
+    selRing.visible=true; selRing.position.set(sel.x,0.9,sel.y); selRing.scale.set(s.range,s.range,1);
+  } else selRing.visible=false;
+}
+
+// ===== Chuột, chạm và phím =====
+const raycaster=new THREE.Raycaster();
+const ndc=new THREE.Vector2();
+const groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+const hitPt=new THREE.Vector3();
+function worldFromEvent(e){
+  const r=renderer.domElement.getBoundingClientRect();
+  ndc.set(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+  raycaster.setFromCamera(ndc,camera);
+  if(!raycaster.ray.intersectPlane(groundPlane,hitPt)) return null;
+  return {x:hitPt.x,y:hitPt.z};
+}
+function cellAt(p){ return {c:Math.floor(p.x/CELL), r:Math.floor(p.y/CELL)}; }
+
+const el=renderer.domElement;
+let press=null, moved=false;
+el.addEventListener('pointerdown',e=>{
+  if(e.button!==0) return;
+  press={x:e.clientX,y:e.clientY,lx:e.clientX,ly:e.clientY};
+  moved=false;
+  el.setPointerCapture(e.pointerId);
+});
+el.addEventListener('pointermove',e=>{
+  if(press){
+    if(!moved && Math.hypot(e.clientX-press.x,e.clientY-press.y)>5) moved=true;
+    if(moved){
+      const r=el.getBoundingClientRect(), sx=W/r.width;
+      panBy((e.clientX-press.lx)*sx,(e.clientY-press.ly)*sx);
+    }
+    press.lx=e.clientX; press.ly=e.clientY;
+    S.hover=null;
+    return;
+  }
+  const p=worldFromEvent(e);
+  S.hover=p?cellAt(p):null;
+});
+el.addEventListener('pointerup',e=>{
+  if(!press) return;
+  const wasClick=!moved;
+  press=null;
+  if(wasClick) handleClick(e);
+});
+el.addEventListener('pointerleave',()=>{ S.hover=null; });
+el.addEventListener('contextmenu',e=>{ e.preventDefault(); S.pick=null; S.sel=null; });
+el.addEventListener('wheel',e=>{ e.preventDefault(); zoomBy(e.deltaY<0?1.1:1/1.1); },{passive:false});
+
+function handleClick(e){
+  if(S.over) return;
+  const p=worldFromEvent(e); if(!p) return;
+  const {c,r}=cellAt(p);
+  const t=S.towers.find(t=>t.c===c&&t.r===r);
+  if(S.pick){
+    if(!validCell(c,r)){ if(t){ S.sel=t; S.pick=null; } else say('Không thể đặt tháp ở đây'); return; }
+    const T=TT[S.pick];
+    if(S.gold<T.cost){ say('Không đủ vàng'); return; }
+    S.gold-=T.cost; S.towers.push(newTower(S.pick,c,r));
+  } else {
+    S.sel=t||null;
+  }
+}
+
+// ===== Giao diện =====
+function updateUI(){
+  $('h-gold').textContent=Math.floor(S.gold);
+  $('h-hp').textContent=Math.max(0,Math.floor(S.baseHp))+'/'+S.baseMax;
+  $('h-wave').textContent=S.waveNo;
+  $('h-left').textContent=S.zombies.length+S.queue.length;
+  $('h-inc').textContent=S.gen*3;
+  $('h-kills').textContent=S.kills;
+
+  const wallCost=90*(S.wall+1), genCost=100*(S.gen+1), repCost=30+S.waveNo*5;
+  $('b-wall').textContent='Gia cố tường (Lv'+S.wall+') — '+wallCost+'💰';
+  $('b-gen').textContent='Máy phát điện (Lv'+S.gen+') — '+genCost+'💰';
+  $('b-repair').textContent='Sửa căn cứ — '+repCost+'💰';
+  $('b-wall').disabled=S.gold<wallCost || S.over || S.wall>=5;
+  $('b-gen').disabled=S.gold<genCost || S.over || S.gen>=6;
+  $('b-repair').disabled=S.gold<repCost || S.over || S.baseHp>=S.baseMax;
+
+  const sel=S.sel && S.towers.includes(S.sel)?S.sel:null;
+  if(!sel) S.sel=null;
+  $('b-up').disabled=!sel || sel.lvl>=5 || S.gold<(sel?upCost(sel):0);
+  $('b-up').textContent=sel ? (sel.lvl>=5?'Đã max cấp':'[U] Nâng cấp → Lv'+(sel.lvl+1)+' — '+upCost(sel)+'💰') : '[U] Nâng cấp tháp';
+  $('b-sell').disabled=!sel;
+  $('b-sell').textContent=sel?'[S] Bán tháp (+'+refund(sel)+'💰)':'[S] Bán tháp';
+
+  ['rifle','shotgun','flame'].forEach(k=>{
+    const b=$('b-'+k); b.classList.toggle('sel',S.pick===k);
+    b.disabled=S.gold<TT[k].cost;
+  });
+
+  const startBtn=$('b-start');
+  const canStart=!S.active && !S.over;
+  startBtn.disabled=!canStart;
+  startBtn.textContent=S.active?'Đang đánh đợt '+S.waveNo+'...':'[Space] Bắt đầu đợt '+(S.waveNo+1)+(((S.waveNo+1)%5===0)?' ⚠ BOSS':'');
+
+  let info;
+  if(S.pick){
+    const T=TT[S.pick];
+    info='<b>'+T.name+'</b> — '+T.desc+' Giá <b>'+T.cost+'💰</b>. Click ô trống để đặt (Esc để hủy).';
+  } else if(sel){
+    const T=TT[sel.type], s=tstats(sel);
+    info='<b>'+T.name+'</b> Lv'+sel.lvl+'/5 · HP '+Math.ceil(sel.hp)+'/'+sel.maxHp+' · Sát thương '+s.dmg.toFixed(1)+' · Tầm '+Math.round(s.range)+' · Tốc độ '+(1/s.cool).toFixed(2)+'/s';
+  } else {
+    info='Chọn tháp (phím 1–3) rồi click vào bản đồ để đặt. Kéo để di chuyển, lăn chuột để zoom, Q/E để xoay. Zombie tràn vào từ 4 phía.';
+  }
+  if(info!==S.lastInfo){ $('info').innerHTML=info; S.lastInfo=info; }
+  if(S.msgT>0){ $('msg').style.display='block'; $('msg').textContent=S.msg; } else { $('msg').style.display='none'; }
+}
+
+$('b-rifle').onclick=()=>pickTower('rifle');
+$('b-shotgun').onclick=()=>pickTower('shotgun');
+$('b-flame').onclick=()=>pickTower('flame');
+$('b-wall').onclick=buyWall;
+$('b-gen').onclick=buyGen;
+$('b-repair').onclick=repairBase;
+$('b-up').onclick=()=>upgrade(S.sel);
+$('b-sell').onclick=()=>sell(S.sel);
+$('b-start').onclick=startWave;
+$('b-zoomin').onclick=()=>zoomBy(1.25);
+$('b-zoomout').onclick=()=>zoomBy(1/1.25);
+$('b-zoomreset').onclick=()=>setZoom(0.7);
+$('b-rotl').onclick=()=>{ cam.yaw-=Math.PI/8; };
+$('b-rotr').onclick=()=>{ cam.yaw+=Math.PI/8; };
+$('restart').onclick=()=>{ $('over').style.display='none'; resetScene(); S=newState(); };
+
+window.addEventListener('keydown',e=>{
+  if(e.target && e.target.tagName==='BUTTON' && (e.key===' '||e.key==='Enter')) e.target.blur();
+  if(e.key==='1') pickTower('rifle');
+  else if(e.key==='2') pickTower('shotgun');
+  else if(e.key==='3') pickTower('flame');
+  else if(e.key===' '){ e.preventDefault(); startWave(); }
+  else if(e.key==='u'||e.key==='U') upgrade(S.sel);
+  else if(e.key==='s'||e.key==='S') sell(S.sel);
+  else if(e.key==='Escape'){ S.pick=null; S.sel=null; }
+  else if(e.key==='+'||e.key==='='){ zoomBy(1.25); }
+  else if(e.key==='-'||e.key==='_'){ zoomBy(1/1.25); }
+  else if(e.key==='0'){ setZoom(0.7); }
+  else if(e.key==='q'||e.key==='Q'){ cam.yaw-=Math.PI/8; }
+  else if(e.key==='e'||e.key==='E'){ cam.yaw+=Math.PI/8; }
+  else if(e.key.startsWith('Arrow')){
+    e.preventDefault();
+    const step=60;
+    if(e.key==='ArrowLeft') panBy(-step,0);
+    else if(e.key==='ArrowRight') panBy(step,0);
+    else if(e.key==='ArrowUp') panBy(0,-step);
+    else if(e.key==='ArrowDown') panBy(0,step);
+  }
+});
+
+// Khi chơi lại: xoá toàn bộ mesh tháp/zombie/hiệu ứng
+function resetScene(){
+  for(const [,g] of towerVis){ scene.remove(g); disposeGroup(g); }
+  towerVis.clear();
+  for(const [,g] of zombieVis){ scene.remove(g); disposeGroup(g); }
+  zombieVis.clear();
+  for(const [,v] of fxVis){ if(v.obj) scene.remove(v.obj); v.dispose(); }
+  fxVis.clear();
+}
+
+// ===== Vòng lặp =====
+S=newState();
+buildWall(false);
+setZoom(0.7);
+let last=performance.now(), uiT=0;
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(!S.over) update(dt);
+  if(wallStone!==(S.wall>=3)) buildWall(S.wall>=3);
+  flameMesh.scale.y=0.9+0.2*Math.sin(S.t*14)+0.05*Math.sin(S.t*23);
+  fireLight.intensity=1.2+0.3*Math.sin(S.t*9);
+  syncTowers(); syncZombies(); syncFx(); updateMarkers();
+  updateCamera();
+  renderer.render(scene,camera);
+  uiT+=dt; if(uiT>0.1){ uiT=0; updateUI(); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
