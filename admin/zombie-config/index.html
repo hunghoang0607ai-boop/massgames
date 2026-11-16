@@ -4,42 +4,73 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Cấu hình 3D Pháo Đài Sống Sót — MassGames</title>
+<title>Quản trị MassGames</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#12141a;color:#e8e8e8;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px;min-height:100vh}
-main{max-width:980px;margin:0 auto}
-a{color:#8b93a7;text-decoration:none;font-size:14px}
+html,body{height:100%}
+body{margin:0;background:#12141a;color:#e8e8e8;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px}
+a{color:#8b93a7;text-decoration:none}
 a:hover{color:#f0c060}
-h1{color:#f0c060;font-size:22px;margin:10px 0 6px}
-h2{font-size:16px;color:#c9d1e0;margin:22px 0 8px;border-bottom:1px solid #2a3144;padding-bottom:6px}
-.card{background:#1a1d26;border:1px solid #2a3144;border-radius:10px;padding:16px;margin-bottom:16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
-.item{background:#14171f;border:1px solid #2a3144;border-radius:8px;padding:12px}
+.hidden{display:none !important}
+.small{font-size:12px;color:#8a92a6}
+.ok{color:#7fdc8a}.err{color:#ff7b7b}
+
+/* Đăng nhập */
+#login-view{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.login-box{width:100%;max-width:380px;background:#1a1d26;border:1px solid #2a3144;border-radius:10px;padding:22px}
+.login-box h1{margin:0 0 14px;font-size:20px;color:#f0c060}
+label{display:block;font-size:12px;color:#8b93a7;margin:10px 0 3px}
+
+/* Khung ERP */
+#app-view{display:flex;min-height:100vh}
+.sidebar{width:248px;flex-shrink:0;background:#0e1016;border-right:1px solid #2a3144;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.sidebar .brand{padding:16px;font-weight:bold;color:#f0c060;border-bottom:1px solid #2a3144}
+.sidebar .brand small{display:block;font-weight:normal;color:#8a92a6;font-size:12px;margin-top:2px}
+.sidebar .section{padding:12px 16px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6b7390}
+.nav{overflow-y:auto;flex:1;padding:0 8px 8px}
+.nav button{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;color:#cfd6e4;border-radius:8px;padding:9px 10px;font-size:14px;cursor:pointer;margin:2px 0}
+.nav button:hover{background:#1a1d26}
+.nav button.active{background:#243055;border-color:#3b4a78;color:#fff}
+.nav button .sub{display:block;font-size:11px;color:#7d86a0;margin-top:2px}
+.sidebar .foot{padding:12px 16px;border-top:1px solid #2a3144;display:flex;justify-content:space-between;align-items:center}
+.sidebar .foot button{margin:0}
+
+.content{flex:1;min-width:0;padding:20px 24px 40px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap}
+.topbar h1{margin:0;font-size:22px;color:#f0c060}
+h2{font-size:15px;color:#c9d1e0;margin:24px 0 10px;border-bottom:1px solid #2a3144;padding-bottom:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.item{background:#1a1d26;border:1px solid #2a3144;border-radius:8px;padding:12px}
 .item h3{margin:0 0 8px;font-size:15px;color:#f0c060}
-label{display:block;font-size:12px;color:#8b93a7;margin:8px 0 3px}
 input[type=text],input[type=email],input[type=password],input[type=number],select{width:100%;background:#0e1016;color:#eee;border:1px solid #47506a;border-radius:6px;padding:6px 8px;font-size:13px}
 input[type=color]{width:100%;height:30px;background:#0e1016;border:1px solid #47506a;border-radius:6px;padding:2px}
 button{background:#2a3144;color:#eee;border:1px solid #47506a;border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer;margin-top:10px}
 button:hover:not(:disabled){background:#384262}
 button:disabled{opacity:.4;cursor:not-allowed}
 button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
-.status{margin-top:10px;font-size:14px;min-height:20px;white-space:pre-wrap}
-.ok{color:#7fdc8a}.err{color:#ff7b7b}
-.hidden{display:none}
-.small{font-size:12px;color:#8a92a6}
-.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.status{margin-top:10px;min-height:20px;white-space:pre-wrap}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.empty{background:#1a1d26;border:1px dashed #3a4262;border-radius:10px;padding:24px;color:#8a92a6}
+
+/* Màn hình hẹp */
+@media (max-width:760px){
+  #app-view{flex-direction:column}
+  .sidebar{width:100%;height:auto;position:static;border-right:0;border-bottom:1px solid #2a3144}
+  .nav{display:flex;overflow-x:auto;overflow-y:hidden;gap:6px;padding:8px}
+  .nav button{white-space:nowrap;width:auto;margin:0}
+  .nav button .sub{display:none}
+  .content{padding:14px}
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="../../assets/config.js"></script>
 </head>
 <body>
-<main>
-  <a href="../../">← Trang chủ MassGames</a> &nbsp;·&nbsp; <a href="../models/">Kho mô hình 3D</a>
-  <h1>Cấu hình 3D — Pháo Đài Sống Sót</h1>
-  <div class="small">Chỉnh màu, kích thước, chỉ số và mô hình 3D cho từng tháp, loại zombie và công trình. Thay đổi có hiệu lực ở lần tải trang game kế tiếp.</div>
 
-  <section class="card" id="login-card">
+<!-- Đăng nhập -->
+<div id="login-view" class="hidden">
+  <div class="login-box">
+    <h1>Quản trị MassGames</h1>
     <label for="email">Email</label>
     <input id="email" type="email" autocomplete="username">
     <label for="password">Mật khẩu</label>
@@ -49,86 +80,143 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
       <button id="btn-google">Đăng nhập bằng Google</button>
     </div>
     <div class="status" id="login-status"></div>
-  </section>
+    <div class="small" style="margin-top:12px"><a href="../../">← Về trang chủ</a></div>
+  </div>
+</div>
 
-  <section class="hidden" id="editor">
-    <div class="card row" style="justify-content:space-between">
-      <div>Đang đăng nhập: <b id="who"></b></div>
-      <button id="btn-logout" style="margin:0">Đăng xuất</button>
+<!-- Giao diện quản trị -->
+<div id="app-view" class="hidden">
+  <aside class="sidebar">
+    <div class="brand">MassGames<small>Quản trị game</small></div>
+    <div class="section">Danh sách game</div>
+    <nav class="nav" id="game-nav"></nav>
+    <div class="foot">
+      <span class="small" id="who"></span>
+      <button id="btn-logout">Đăng xuất</button>
     </div>
+  </aside>
+
+  <main class="content">
+    <div class="topbar">
+      <h1 id="page-title">Chọn một game</h1>
+      <a href="../../">← Trang chủ</a>
+    </div>
+    <div class="small" id="page-sub"></div>
     <div class="status" id="global-status"></div>
-
-    <h2>Tháp</h2>
-    <div class="grid" id="grp-tower"></div>
-
-    <h2>Loại zombie</h2>
-    <div class="grid" id="grp-zombie"></div>
-
-    <h2>Công trình</h2>
-    <div class="grid" id="grp-building"></div>
-  </section>
-</main>
+    <div id="game-body"></div>
+  </main>
+</div>
 
 <script>
 (function(){
   const cfg = window.MASSGAMES_CONFIG;
-  const GAME = 'zombie-fortress';
   const db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY, {
     auth: { persistSession: true, autoRefreshToken: true }
   });
   const $ = id => document.getElementById(id);
+  let games = [];
   let assets = [];
+  let currentSlug = null;
 
-  // Khai báo các trường chỉnh cho từng loại. type: num | color | model
-  const SCHEMA = {
-    tower: {
-      rifle: { title:'Chốt bắn', fields:[['name','text','Tên'],['cost','num','Giá'],['range','num','Tầm bắn'],['dmg','num','Sát thương'],['rate','num','Chu kỳ bắn (s)'],['color','color','Màu nhấn'],['model','model','Mô hình 3D']] },
-      shotgun:{ title:'Súng săn', fields:[['name','text','Tên'],['cost','num','Giá'],['range','num','Tầm bắn'],['dmg','num','Sát thương'],['rate','num','Chu kỳ bắn (s)'],['color','color','Màu nhấn'],['model','model','Mô hình 3D']] },
-      flame:  { title:'Bình lửa', fields:[['name','text','Tên'],['cost','num','Giá'],['range','num','Tầm bắn'],['dmg','num','Sát thương'],['rate','num','Chu kỳ bắn (s)'],['color','color','Màu nhấn'],['model','model','Mô hình 3D']] }
-    },
-    zombie: {
-      walker:{ title:'Walker', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] },
-      runner:{ title:'Runner', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] },
-      tank:  { title:'Tank', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] },
-      boss:  { title:'Boss', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] }
-    },
-    building: {
-      house:      { title:'Nhà dân', fields:[['wall_color','color','Màu tường'],['roof_color','color','Màu mái'],['model','model','Mô hình 3D (thay cả nhà)']] },
-      wall_wood:  { title:'Tường gỗ', fields:[['color','color','Màu gỗ']] },
-      wall_stone: { title:'Tường đá', fields:[['color','color','Màu đá']] }
+  // Cấu hình 3D theo từng game. Game chưa có khai báo sẽ hiện thông báo.
+  const SCHEMAS = {
+    'zombie-fortress': {
+      tower: {
+        rifle:  { title:'Chốt bắn', fields:[['name','text','Tên'],['cost','num','Giá'],['range','num','Tầm bắn'],['dmg','num','Sát thương'],['rate','num','Chu kỳ bắn (s)'],['color','color','Màu nhấn'],['model','model','Mô hình 3D']] },
+        shotgun:{ title:'Súng săn', fields:[['name','text','Tên'],['cost','num','Giá'],['range','num','Tầm bắn'],['dmg','num','Sát thương'],['rate','num','Chu kỳ bắn (s)'],['color','color','Màu nhấn'],['model','model','Mô hình 3D']] },
+        flame:  { title:'Bình lửa', fields:[['name','text','Tên'],['cost','num','Giá'],['range','num','Tầm bắn'],['dmg','num','Sát thương'],['rate','num','Chu kỳ bắn (s)'],['color','color','Màu nhấn'],['model','model','Mô hình 3D']] }
+      },
+      zombie: {
+        walker:{ title:'Walker', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] },
+        runner:{ title:'Runner', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] },
+        tank:  { title:'Tank', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] },
+        boss:  { title:'Boss', fields:[['hp','num','Máu'],['speed','num','Tốc độ'],['dmg','num','Sát thương'],['r','num','Bán kính'],['gold','num','Vàng thưởng'],['scale','num','Tỉ lệ 3D'],['color','color','Màu da'],['model','model','Mô hình 3D']] }
+      },
+      building: {
+        house:      { title:'Nhà dân', fields:[['wall_color','color','Màu tường'],['roof_color','color','Màu mái'],['model','model','Mô hình 3D (thay cả nhà)']] },
+        wall_wood:  { title:'Tường gỗ', fields:[['color','color','Màu gỗ']] },
+        wall_stone: { title:'Tường đá', fields:[['color','color','Màu đá']] }
+      }
     }
   };
-  const GROUP = { tower:'grp-tower', zombie:'grp-zombie', building:'grp-building' };
+  const GROUPS = [['tower','Tháp'],['zombie','Loại zombie'],['building','Công trình']];
 
   function setStatus(id,msg,cls){ const el=$(id); el.textContent=msg; el.className='status '+(cls||''); }
 
-  async function showState(session){
+  // ---------- Đăng nhập ----------
+  function showAuth(session){
     const logged=!!session;
-    $('login-card').classList.toggle('hidden',logged);
-    $('editor').classList.toggle('hidden',!logged);
-    if(logged){ $('who').textContent=session.user.email; await loadAll(); }
+    $('login-view').classList.toggle('hidden',logged);
+    $('app-view').classList.toggle('hidden',!logged);
+    if(logged){ $('who').textContent=session.user.email; loadGames(); }
   }
 
-  async function loadAll(){
+  // ---------- Danh sách game (thanh bên) ----------
+  async function loadGames(){
+    const {data,error}=await db.from('games').select('slug,title').order('title');
+    if(error){ setStatus('global-status','Lỗi tải danh sách game: '+error.message,'err'); return; }
+    games=data||[];
+    renderNav();
+    if(!currentSlug && games.length) selectGame(games[0].slug);
+    else if(currentSlug) selectGame(currentSlug);
+  }
+
+  function renderNav(){
+    const nav=$('game-nav'); nav.textContent='';
+    games.forEach(g=>{
+      const b=document.createElement('button');
+      b.dataset.slug=g.slug;
+      b.className=g.slug===currentSlug?'active':'';
+      b.textContent=g.title||g.slug;
+      const s=document.createElement('span'); s.className='sub';
+      s.textContent=SCHEMAS[g.slug]?'Có cấu hình 3D':'Chưa có cấu hình 3D';
+      b.appendChild(s);
+      b.onclick=()=>selectGame(g.slug);
+      nav.appendChild(b);
+    });
+  }
+
+  async function selectGame(slug){
+    currentSlug=slug;
+    renderNav();
+    const g=games.find(x=>x.slug===slug);
+    $('page-title').textContent=g?(g.title||slug):slug;
+    $('page-sub').textContent='Mã game: '+slug;
+    setStatus('global-status','');
+    const body=$('game-body'); body.textContent='';
+    if(!SCHEMAS[slug]){
+      const d=document.createElement('div'); d.className='empty';
+      d.textContent='Game này chưa có mục cấu hình 3D. Hiện chỉ Pháo Đài Sống Sót có cấu hình.';
+      body.appendChild(d); return;
+    }
     setStatus('global-status','Đang tải cấu hình...');
     const [rowsRes, assetsRes] = await Promise.all([
-      db.from('game_entities').select('kind,key,config').eq('game_slug',GAME),
+      db.from('game_entities').select('kind,key,config').eq('game_slug',slug),
       db.from('assets_3d').select('id,name,storage_path,format').order('created_at',{ascending:false})
     ]);
+    if(currentSlug!==slug) return; // người dùng đã chuyển game khác
     if(rowsRes.error){ setStatus('global-status','Lỗi tải cấu hình: '+rowsRes.error.message,'err'); return; }
     assets = assetsRes.data || [];
-    const map = {};
-    rowsRes.data.forEach(r => { map[r.kind+':'+r.key] = r.config || {}; });
-    for(const kind of Object.keys(SCHEMA)){
-      const grp = $(GROUP[kind]); grp.textContent='';
-      for(const key of Object.keys(SCHEMA[kind])){
-        grp.appendChild(buildCard(kind,key,SCHEMA[kind][key],map[kind+':'+key]||{}));
-      }
-    }
+    const map={};
+    (rowsRes.data||[]).forEach(r=>{ map[r.kind+':'+r.key]=r.config||{}; });
+    renderGame(slug,map,body);
     setStatus('global-status','');
   }
 
-  function buildCard(kind,key,def,config){
+  function renderGame(slug,map,body){
+    const schema=SCHEMAS[slug];
+    GROUPS.forEach(([kind,label])=>{
+      const defs=schema[kind]; if(!defs) return;
+      const h=document.createElement('h2'); h.textContent=label; body.appendChild(h);
+      const grid=document.createElement('div'); grid.className='grid';
+      Object.keys(defs).forEach(key=>{
+        grid.appendChild(buildCard(slug,kind,key,defs[key],map[kind+':'+key]||{}));
+      });
+      body.appendChild(grid);
+    });
+  }
+
+  function buildCard(slug,kind,key,def,config){
     const card=document.createElement('div'); card.className='item';
     const h=document.createElement('h3'); h.textContent=def.title; card.appendChild(h);
     const inputs={};
@@ -143,7 +231,8 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
         input.value=config.model_id||'';
       } else if(type==='color'){
         input=document.createElement('input'); input.type='color';
-        input.value=/^#[0-9a-fA-F]{6}$/.test(config[field]||'')?config[field]:'#888888';
+        const cur=field==='color'||field.endsWith('_color') ? config[field] : null;
+        input.value=/^#[0-9a-fA-F]{6}$/.test(cur||'')?cur:'#888888';
       } else if(type==='num'){
         input=document.createElement('input'); input.type='number'; input.step='any';
         input.value=config[field]!==undefined?config[field]:'';
@@ -157,14 +246,14 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
     const btn=document.createElement('button'); btn.className='go'; btn.textContent='Lưu';
     const st=document.createElement('div'); st.className='small';
     btn.onclick=async()=>{
-      btn.disabled=true; st.textContent='Đang lưu...';
+      btn.disabled=true; st.className='small'; st.textContent='Đang lưu...';
       const newCfg={...config};
       for(const [field,{el,type}] of Object.entries(inputs)){
         if(type==='model'){ if(el.value) newCfg.model_id=el.value; else delete newCfg.model_id; }
         else if(type==='num'){ if(el.value!=='') newCfg[field]=Number(el.value); }
         else newCfg[field]=el.value;
       }
-      const {error}=await db.from('game_entities').upsert({game_slug:GAME,kind,key,config:newCfg},{onConflict:'game_slug,kind,key'});
+      const {error}=await db.from('game_entities').upsert({game_slug:slug,kind,key,config:newCfg},{onConflict:'game_slug,kind,key'});
       btn.disabled=false;
       if(error){ st.className='small err'; st.textContent='Lỗi: '+error.message; return; }
       Object.assign(config,newCfg);
@@ -174,6 +263,7 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
     return card;
   }
 
+  // ---------- Sự kiện ----------
   $('btn-login').onclick=async()=>{
     setStatus('login-status','Đang đăng nhập...');
     const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
@@ -186,8 +276,8 @@ button.go{background:#2f7d3a;border-color:#3f9c4b;font-weight:bold}
   };
   $('btn-logout').onclick=async()=>{ await db.auth.signOut(); };
 
-  db.auth.onAuthStateChange((_e,session)=>{ showState(session); });
-  db.auth.getSession().then(({data})=>showState(data.session));
+  db.auth.onAuthStateChange((_e,session)=>{ showAuth(session); });
+  db.auth.getSession().then(({data})=>showAuth(data.session));
 })();
 </script>
 </body>
