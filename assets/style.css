@@ -42,3 +42,6 @@ main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:24px 20px}
   #q{flex:1;width:auto}
   .hero h1{font-size:22px}
 }
+
+.admin-link{color:#f0c060;text-decoration:none;font-size:14px;padding:6px 10px;border:1px solid #47506a;border-radius:8px;white-space:nowrap}
+.admin-link:hover{background:#2a3144}
