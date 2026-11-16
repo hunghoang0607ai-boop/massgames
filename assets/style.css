@@ -1,0 +1,44 @@
+*{box-sizing:border-box}
+:root{--bg:#0e1016;--card:#171b25;--line:#252b3a;--txt:#e9ecf4;--mute:#8b93a7;--acc:#f0c060}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;flex-direction:column}
+a{color:inherit;text-decoration:none}
+
+.top{position:sticky;top:0;z-index:5;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:12px 20px;background:rgba(14,16,22,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.brand{font-size:20px}
+.brand b{color:var(--acc)}
+.tools{display:flex;gap:8px;flex:1;justify-content:flex-end;min-width:0}
+#q,#cat{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px;outline:none}
+#q{width:min(320px,100%)}
+#q:focus,#cat:focus{border-color:var(--acc)}
+
+main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:24px 20px}
+.hero{padding:8px 0 20px}
+.hero h1{margin:0 0 6px;font-size:28px}
+.hero p{margin:0;color:var(--mute)}
+
+.status{color:var(--mute);font-size:14px;min-height:20px;margin-bottom:12px}
+.status.err{color:#ff8a8a}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+.card{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;transition:transform .15s,border-color .15s;cursor:pointer}
+.card:hover{transform:translateY(-3px);border-color:var(--acc)}
+.thumb{aspect-ratio:16/10;background:linear-gradient(135deg,#2a3346,#151a26);display:flex;align-items:center;justify-content:center;font-size:44px}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
+.title{font-weight:700;font-size:16px;line-height:1.3}
+.desc{color:var(--mute);font-size:13px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta{margin-top:auto;display:flex;justify-content:space-between;font-size:12px;color:var(--mute)}
+.tag{color:var(--acc)}
+
+.more{display:flex;justify-content:center;margin:28px 0 8px}
+.more button{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:10px 20px;font-size:15px;cursor:pointer}
+.more button:hover{border-color:var(--acc)}
+.more button:disabled{opacity:.5;cursor:default}
+
+.foot{text-align:center;color:var(--mute);font-size:13px;padding:20px;border-top:1px solid var(--line)}
+
+@media (max-width:600px){
+  .tools{justify-content:stretch}
+  #q{flex:1;width:auto}
+  .hero h1{font-size:22px}
+}

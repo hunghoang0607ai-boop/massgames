@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MassGames — Kho game miễn phí</title>
+<meta name="description" content="Hàng trăm game trình duyệt miễn phí. Chơi ngay, không cần cài đặt.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./">🎮 <b>Mass</b>Games</a>
+  <div class="tools">
+    <input id="q" type="search" placeholder="Tìm game…" autocomplete="off">
+    <select id="cat"><option value="">Tất cả thể loại</option></select>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Chọn game, chơi ngay</h1>
+    <p>Game trình duyệt miễn phí — không cần tải, không cần cài đặt.</p>
+  </section>
+
+  <div id="status" class="status"></div>
+  <div id="grid" class="grid" aria-live="polite"></div>
+  <div class="more"><button id="more" hidden>Tải thêm game</button></div>
+</main>
+
+<footer class="foot">© MassGames · leotecks.com</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
