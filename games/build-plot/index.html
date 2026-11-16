@@ -21,6 +21,7 @@ a:hover{color:#f0c060}
 #hint{top:12px;left:50%;transform:translateX(-50%);max-width:70%;font-size:14px;color:#f0c060;text-align:center}
 #tools{bottom:12px;left:12px;width:300px}
 #tools .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+#tools{width:320px}
 .btn{background:#2a3144;color:#eee;border:1px solid #47506a;border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;cursor:pointer}
 .btn:hover:not(:disabled){background:#384262}
 .btn:disabled{opacity:.4;cursor:not-allowed}
@@ -47,11 +48,11 @@ a:hover{color:#f0c060}
 <div class="panel" id="hint"></div>
 
 <div class="panel" id="tools">
-  <div class="small">Chọn công trình rồi nhấn vào ô trong vùng. Mỗi ô là 10 m × 10 m.</div>
+  <div class="small">Chọn loại khu phát triển rồi nhấn vào ô trong vùng. Mỗi ô khoảng 3 × 3 km.</div>
   <div class="row" id="types"></div>
   <div class="row">
-    <button class="btn" id="btn-remove">Xoá công trình</button>
-    <button class="btn" id="btn-reset">Chọn lại vùng</button>
+    <button class="btn" id="btn-remove">Xoá khu phát triển</button>
+    <button class="btn" id="btn-reset">Chọn tỉnh khác</button>
   </div>
 </div>
 
@@ -60,15 +61,18 @@ a:hover{color:#f0c060}
 <script>
 (function(){
   const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
-  const SIDE = 100;             // cạnh vùng (m): 100 × 100 = 10.000 m²
-  const CELL = 10;              // cạnh mỗi ô xây (m)
-  const N = SIDE / CELL;        // 10 ô mỗi chiều
+  // Vùng chọn mô phỏng "1 tỉnh": 30 × 30 km (~900 km²). Đây là vùng vuông gần đúng,
+  // không phải ranh giới hành chính thật (không có dữ liệu ranh giới tỉnh).
+  const SIDE = 30000;
+  const CELL = 3000;            // cạnh mỗi khu phát triển (m)
+  const N = SIDE / CELL;        // 10 khu mỗi chiều
   const HALF = SIDE / 2;
   const M_LAT = 111320;         // mét trên 1 độ vĩ độ
+  const OVERVIEW = { center:[106.0,16.0], zoom:5.3, pitch:0, bearing:0 }; // góc nhìn toàn quốc để chọn tỉnh
   const TYPES = {
-    house: { name:'Nhà ở',      cost:100, h:8, c:'#e0b97a', income:2, pop:5 },
-    farm:  { name:'Nông trại',  cost:120, h:3, c:'#7fbf5a', income:4, pop:0 },
-    shop:  { name:'Cửa hàng',   cost:150, h:6, c:'#5aa2d6', income:6, pop:0 }
+    house: { name:'Khu dân cư',    cost:100, c:'#e0b97a', income:2, pop:5 },
+    farm:  { name:'Vùng nông nghiệp', cost:120, c:'#7fbf5a', income:4, pop:0 },
+    shop:  { name:'Khu thương mại', cost:150, c:'#5aa2d6', income:6, pop:0 }
   };
   const $ = id => document.getElementById(id);
 
@@ -82,8 +86,8 @@ a:hover{color:#f0c060}
 
   // ---------- Bản đồ ----------
   map = new maplibregl.Map({
-    container:'map', style:STYLE, center:[105.8542,21.0285], zoom:17, pitch:55, bearing:-17,
-    minZoom:15, maxPitch:80, attributionControl:{compact:true}
+    container:'map', style:STYLE, center:OVERVIEW.center, zoom:OVERVIEW.zoom, pitch:OVERVIEW.pitch, bearing:OVERVIEW.bearing,
+    minZoom:4, maxPitch:80, attributionControl:{compact:true}
   });
   map.on('style.load', ()=>{ styleReady=true; addLayers(); redraw(); });
   map.on('click', e=>onMapClick(e.lngLat));
@@ -94,12 +98,12 @@ a:hover{color:#f0c060}
     map.addSource('plot',{type:'geojson',data:empty()});
     map.addSource('grid',{type:'geojson',data:empty()});
     map.addSource('bld',{type:'geojson',data:empty()});
-    map.addLayer({id:'plot-fill',type:'fill',source:'plot',paint:{'fill-color':'#4caf50','fill-opacity':0.35}},first);
-    map.addLayer({id:'grid-lines',type:'line',source:'grid',paint:{'line-color':'#ffffff','line-opacity':0.25,'line-width':1}},first);
-    map.addLayer({id:'bld',type:'fill-extrusion',source:'bld',paint:{
-      'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':0,'fill-extrusion-opacity':0.95}},first);
-    // Hàng rào quanh vùng: nét đứt dày màu gỗ
-    map.addLayer({id:'plot-fence',type:'line',source:'plot',paint:{'line-color':'#c8a064','line-width':5,'line-dasharray':[1.2,0.8]}},first);
+    map.addLayer({id:'plot-fill',type:'fill',source:'plot',paint:{'fill-color':'#4caf50','fill-opacity':0.18}},first);
+    map.addLayer({id:'grid-lines',type:'line',source:'grid',paint:{'line-color':'#ffffff','line-opacity':0.3,'line-width':1}},first);
+    // Ở tầm nhìn cấp tỉnh, mỗi khu phát triển vẽ phẳng theo màu, không dựng khối 3D
+    map.addLayer({id:'bld',type:'fill',source:'bld',paint:{'fill-color':['get','c'],'fill-opacity':0.75}},first);
+    // Ranh giới vùng đã chọn: viền nét đứt đánh dấu lãnh thổ (vùng vuông gần đúng, không phải ranh giới hành chính thật)
+    map.addLayer({id:'plot-fence',type:'line',source:'plot',paint:{'line-color':'#f0c060','line-width':3,'line-dasharray':[2,1.2]}},first);
   }
 
   function empty(){ return {type:'FeatureCollection',features:[]}; }
@@ -115,8 +119,8 @@ a:hover{color:#f0c060}
       P = { lng:ll.lng, lat:ll.lat, mLng };
       grid = Array.from({length:N},()=>Array(N).fill(null));
       money = 500; pop = 0; t = 0; logs = [];
-      addLog('Đã chọn vùng 10.000 m² (100 × 100 m).');
-      addLog('Bắt đầu xây dựng. Thu nhập chạy theo thời gian.');
+      addLog('Đã chọn một vùng khoảng 900 km² (xấp xỉ 1 tỉnh).');
+      addLog('Bắt đầu phát triển. Thu nhập chạy theo thời gian.');
       startTimer();
       flyTo(ll);
       redraw(); render();
@@ -155,7 +159,7 @@ a:hover{color:#f0c060}
   }
 
   function flyTo(ll){
-    map.flyTo({ center:[ll.lng,ll.lat], zoom:18, pitch:55, bearing:-17, duration:1200 });
+    map.flyTo({ center:[ll.lng,ll.lat], zoom:9.3, pitch:0, bearing:0, duration:1400 });
   }
 
   // ---------- Vẽ ----------
@@ -182,7 +186,7 @@ a:hover{color:#f0c060}
     for(let i=0;i<N;i++) for(let j=0;j<N;j++){
       const type=grid[i][j]; if(!type) continue;
       const x0=-HALF+i*CELL, y0=-HALF+j*CELL, T=TYPES[type];
-      blds.push({type:'Feature',properties:{h:T.h,c:T.c},geometry:{type:'Polygon',coordinates:[square(x0,y0,x0+CELL,y0+CELL)]}});
+      blds.push({type:'Feature',properties:{c:T.c},geometry:{type:'Polygon',coordinates:[square(x0,y0,x0+CELL,y0+CELL)]}});
     }
     map.getSource('bld').setData({type:'FeatureCollection',features:blds});
   }
@@ -227,8 +231,8 @@ a:hover{color:#f0c060}
     $('s-income').textContent=P?incomeNow():0;
     $('s-t').textContent=t;
     $('hint').textContent = !P
-      ? 'Nhấn lên bản đồ để chọn một vùng 10.000 m² để xây dựng.'
-      : (removeMode ? 'Nhấn vào công trình để xoá.' : 'Nhấn vào ô trong vùng để xây '+TYPES[selType].name+'.');
+      ? 'Nhấn lên bản đồ để chọn một vùng khoảng 900 km² (xấp xỉ 1 tỉnh) để bắt đầu.'
+      : (removeMode ? 'Nhấn vào khu phát triển để xoá.' : 'Nhấn vào ô trong vùng để lập '+TYPES[selType].name+'.');
     $('btn-remove').classList.toggle('on',removeMode);
     $('btn-remove').disabled=!P;
     $('btn-reset').disabled=!P;
@@ -252,6 +256,7 @@ a:hover{color:#f0c060}
   $('btn-reset').onclick=()=>{
     if(!P) return;
     stopTimer(); P=null; grid=[]; money=500; pop=0; t=0; logs=[]; removeMode=false;
+    map.flyTo({ center:OVERVIEW.center, zoom:OVERVIEW.zoom, pitch:OVERVIEW.pitch, bearing:OVERVIEW.bearing, duration:1200 });
     redraw(); render();
   };
   render();
