@@ -88,7 +88,7 @@ th{color:#8b93a7;font-weight:normal;font-size:12px}
 // Dựng ảnh xem trước từ file .glb/.gltf bằng Three.js (chạy trên trình duyệt, không cần lưu ảnh riêng).
 import * as THREE from 'three';
 import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
-const W=160, H=120;
+const W=320, H=240;
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
 renderer.setPixelRatio(1); renderer.setSize(W,H);
 const scene=new THREE.Scene();
@@ -106,9 +106,10 @@ function render(url){
     scene.add(obj);
     const box=new THREE.Box3().setFromObject(obj);
     const size=box.getSize(new THREE.Vector3()), ctr=box.getCenter(new THREE.Vector3());
-    const maxDim=Math.max(size.x,size.y,size.z)||1;
-    const d=maxDim/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)))*1.25;
-    camera.position.set(ctr.x+d*0.6,ctr.y+d*0.35,ctr.z+d);
+    // Bán kính bao quanh toàn bộ mô hình: đảm bảo mô hình luôn nằm trọn trong khung, mọi hướng
+    const radius=(size.length()/2)||1;
+    const d=radius/Math.sin(THREE.MathUtils.degToRad(camera.fov/2))*1.1;
+    camera.position.set(ctr.x+d*0.6,ctr.y+d*0.3,ctr.z+d*0.8);
     camera.lookAt(ctr);
     renderer.render(scene,camera);
     const data=renderer.domElement.toDataURL('image/png');
