@@ -583,12 +583,15 @@ const zLegGeo=new THREE.BoxGeometry(0.5,1.6,0.5);
 const zEyeGeo=new THREE.SphereGeometry(0.12,6,4);
 const eyeMat=new THREE.MeshStandardMaterial({color:0xff2020,emissive:0xff2020,emissiveIntensity:1.5});
 const skinMat=new THREE.MeshStandardMaterial({color:0x9fbf7a,roughness:0.9});
+// Hệ số phóng to zombie so với bán kính va chạm (z.r). Trước đây 1.2 làm zombie nhìn quá nhỏ
+// so với tháp (~cao 20) và nhà (~cao 11-15); nâng lên để zombie nổi bật, dễ thấy hơn.
+const ZOMBIE_SCALE=2.3;
 function makeZombieMesh(z){
   const g=new THREE.Group();
   const slotZ=cloneSlot('zombie:'+z.type);
   if(slotZ){
     g.add(slotZ);
-    const k0=z.r/10*1.2*(z.scale||1); g.scale.setScalar(k0);
+    const k0=z.r/10*ZOMBIE_SCALE*(z.scale||1); g.scale.setScalar(k0);
     const barZ=makeBar(3.2,5.6); g.add(barZ.grp);
     g.userData={mat:new THREE.MeshStandardMaterial({color:0x000000}),legL:new THREE.Group(),legR:new THREE.Group(),bar:barZ,k:k0};
     return g;
@@ -603,7 +606,7 @@ function makeZombieMesh(z){
   const legLM=new THREE.Mesh(zLegGeo,mat); legLM.position.y=-0.8; legLM.castShadow=true; legL.add(legLM); g.add(legL);
   const legR=new THREE.Group(); legR.position.set(0.35,1.6,0);
   const legRM=new THREE.Mesh(zLegGeo,mat); legRM.position.y=-0.8; legRM.castShadow=true; legR.add(legRM); g.add(legR);
-  const k=z.r/10*1.2*(z.scale||1);
+  const k=z.r/10*ZOMBIE_SCALE*(z.scale||1);
   g.scale.setScalar(k);
   const bar=makeBar(3.2,5.6);
   g.add(bar.grp);
